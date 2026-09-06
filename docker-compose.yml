@@ -1,0 +1,87 @@
+# =============================================================================
+# AI Job Hunter - Docker Compose 配置（生产环境）
+# 说明：
+#   - DB/Redis 使用 /opt/project/envs/db.env 中的公用基础设施
+#   - 应用服务只包含 api-server 和 agent
+#   - 本地开发用 docker-compose.dev.yml（包含 DB）
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # 前端服务（ai-job-hunter-fe）
+  # ---------------------------------------------------------------------------
+  ai-job-hunter-fe:
+    image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-fe:${IMAGE_TAG:-latest}
+    container_name: ai-job-hunter-fe
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NUXT_PUBLIC_API_BASE: http://ai-job-hunter-be:8080/api/v1
+    expose:
+      - "3000"
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ai-job-hunter-fe.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.ai-job-hunter-fe.entrypoints=websecure"
+      - "traefik.http.routers.ai-job-hunter-fe.tls=true"
+      - "traefik.http.routers.ai-job-hunter-fe.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ai-job-hunter-fe.loadbalancer.server.port=3000"
+      # Portainer 权限控制：不配置会导致手动 docker compose 重建后 Restricted 权限丢失
+      # （但在 Portainer 页面重启无影响）
+      # - "io.portainer.accesscontrol.users=xxuser"
+
+  # ---------------------------------------------------------------------------
+  # 后端服务（ai-job-hunter-be）
+  # ---------------------------------------------------------------------------
+  ai-job-hunter-be:
+    image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-be:${IMAGE_TAG:-latest}
+    container_name: ai-job-hunter-be
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    expose:
+      - "8080"
+    networks:
+      - proxy
+      - db-net
+    labels:
+      - "traefik.enable=false"
+      # Portainer 权限控制：不配置会导致手动 docker compose 重建后 Restricted 权限丢失
+      # （但在 Portainer 页面重启无影响）
+      # - "io.portainer.accesscontrol.users=xxuser"
+
+  # ---------------------------------------------------------------------------
+  # Agent 服务（ai-job-hunter-agent）
+  # ---------------------------------------------------------------------------
+  ai-job-hunter-agent:
+    image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-agent:${IMAGE_TAG:-latest}
+    container_name: ai-job-hunter-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "8081"
+    networks:
+      - proxy
+      - db-net
+    labels:
+      - "traefik.enable=false"
+      # Portainer 权限控制：不配置会导致手动 docker compose 重建后 Restricted 权限丢失
+      # （但在 Portainer 页面重启无影响）
+      # - "io.portainer.accesscontrol.users=xxuser"
+
+# =============================================================================
+# 网络
+# =============================================================================
+networks:
+  proxy:
+    external: true
+    name: proxy
+  db-net:
+    external: true
+    name: db-net

@@ -1,0 +1,59 @@
+# =============================================================================
+# AI Job Hunter - Docker Compose 配置（本地开发）
+# 说明：
+#   - 包含 PostgreSQL + Redis（用于本地开发）
+#   - 生产环境使用 docker-compose.yml（无 DB）
+# 使用：docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 数据库（本地开发用）
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    container_name: aijobhunter-db
+    environment:
+      POSTGRES_DB: aijobhunter
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aijobhunter-network
+
+  # ---------------------------------------------------------------------------
+  # Redis 缓存（本地开发用）
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: aijobhunter-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aijobhunter-network
+
+# =============================================================================
+# 网络 & 卷
+# =============================================================================
+networks:
+  aijobhunter-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,77 @@
+# AI Job Hunter Backend - CD Workflow
+
+name: CD
+
+on:
+  push:
+    branches: [master, main]
+
+env:
+  IMAGE_REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+  IMAGE_PROJECT: ai-job-hunter-be
+  COMPOSE_FILE: docker-compose.yml
+  COMPOSE_SERVICES: ai-job-hunter-be
+  DEPLOY_PRIMARY_BRANCH: ${{ vars.DEPLOY_PRIMARY_BRANCH || 'main' }}
+  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Check deploy branch
+        run: |
+          if [ "${{ github.ref_name }}" != "${{ env.DEPLOY_PRIMARY_BRANCH }}" ]; then
+            echo "Not primary branch, skipping"
+            exit 0
+          fi
+
+      - name: Prepare image tag
+        id: image_tag
+        run: |
+          echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate SSH key
+        run: |
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/ssh_key
+          chmod 600 ~/ssh_key
+          ssh-keygen -l -f ~/ssh_key
+          echo "SSH key validated"
+
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: IMAGE_TAG,DEPLOY_PATH
+          script: |
+            set -e
+            echo "=== Login to GHCR ==="
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull latest code from backend repo (contains docker-compose.yml)
+            cd ${{ env.DEPLOY_PATH }}/ai-job-hunter-be
+            git pull origin main
+            
+            echo "=== Update .env ==="
+            echo "IMAGE_TAG=$IMAGE_TAG" >> .env
+            
+            echo "=== Pull and restart ==="
+            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
+            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} up -d ${{ env.COMPOSE_SERVICES }}
+            
+            echo "=== Done ==="
+            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} ps
+
+      - name: Cleanup
+        run: rm -f ~/ssh_key
