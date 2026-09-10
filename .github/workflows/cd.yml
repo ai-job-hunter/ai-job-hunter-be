@@ -17,7 +17,7 @@ env:
 
 permissions:
   contents: read
-  packages: read
+  packages: write
 
 jobs:
   deploy:
@@ -36,8 +36,7 @@ jobs:
       - name: Prepare image tag
         id: image_tag
         run: |
-          echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_TAG=${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Validate SSH key
         run: |
@@ -57,19 +56,16 @@ jobs:
           script: |
             set -e
             echo "=== Login to GHCR ==="
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            # Pull latest code from backend repo (contains docker-compose.yml)
-            cd ${{ env.DEPLOY_PATH }}/ai-job-hunter-be
-            git pull origin main
-            
-            echo "=== Update .env ==="
-            echo "IMAGE_TAG=$IMAGE_TAG" >> .env
-            
+            echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "=== Update IMAGE_TAG in .env ==="
+            cd ${{ env.DEPLOY_PATH }}
+            grep -q "^IMAGE_TAG=" .env && sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" .env || echo "IMAGE_TAG=$IMAGE_TAG" >> .env
+
             echo "=== Pull and restart ==="
             docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
             docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} up -d ${{ env.COMPOSE_SERVICES }}
-            
+
             echo "=== Done ==="
             docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} ps
 
