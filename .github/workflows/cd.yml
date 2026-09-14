@@ -55,18 +55,19 @@ jobs:
           envs: IMAGE_TAG,DEPLOY_PATH
           script: |
             set -e
+            cd ${{ env.DEPLOY_PATH }}
+
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo "=== Update IMAGE_TAG and restart ==="
             echo "IMAGE_TAG=$IMAGE_TAG" > docker-tag.env
 
             echo "=== Pull and restart ==="
-            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
-            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} up -d ${{ env.COMPOSE_SERVICES }}
+            docker compose --env-file docker-tag.env pull
+            docker compose --env-file docker-tag.env up -d
 
             echo "=== Done ==="
-            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} ps
+            docker compose ps
 
       - name: Cleanup
         run: rm -f ~/ssh_key
