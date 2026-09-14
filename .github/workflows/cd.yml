@@ -30,7 +30,7 @@ jobs:
         run: |
           if [ "${{ github.ref_name }}" != "${{ env.DEPLOY_PRIMARY_BRANCH }}" ]; then
             echo "Not primary branch, skipping"
-            exit 0
+            exit 78
           fi
 
       - name: Prepare image tag
