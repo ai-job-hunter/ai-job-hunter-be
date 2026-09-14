@@ -63,8 +63,8 @@ jobs:
             echo "IMAGE_TAG=$IMAGE_TAG" > docker-tag.env
 
             echo "=== Pull and restart ==="
-            docker compose --env-file docker-tag.env pull
-            docker compose --env-file docker-tag.env up -d
+            docker compose pull
+            docker compose up -d
 
             echo "=== Done ==="
             docker compose ps
