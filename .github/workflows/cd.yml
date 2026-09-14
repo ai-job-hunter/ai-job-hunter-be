@@ -63,7 +63,7 @@ jobs:
             git pull origin main
 
             echo "=== Update IMAGE_TAG in docker-tag.env ==="
-            grep -q "^IMAGE_TAG=" docker-tag.env && sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" docker-tag.env || echo "IMAGE_TAG=$IMAGE_TAG" >> docker-tag.env
+            echo "IMAGE_TAG=$IMAGE_TAG" > docker-tag.env
 
             echo "=== Pull and restart ==="
             docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
