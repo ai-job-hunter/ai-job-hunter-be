@@ -13,8 +13,6 @@ env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ${{ github.repository_owner }}
   IMAGE_PROJECT: ai-job-hunter-be
-  POSTGRESQL_IMAGE: postgres:17-alpine
-  REDIS_IMAGE: redis:8.0-alpine
 
 permissions:
   contents: read
@@ -27,7 +25,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ env.POSTGRESQL_IMAGE }}
+        image: postgres:17-alpine
         env:
           POSTGRES_DB: ai_job_hunter_test
           POSTGRES_USER: test
