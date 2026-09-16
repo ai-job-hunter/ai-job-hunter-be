@@ -68,6 +68,8 @@ jobs:
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$IMAGE_TAG/" docker-tag.env
+            sed -i "/^IMAGE_NAMESPACE=/d" docker-tag.env
+            sed -i "/^IMAGE_TAG=/a IMAGE_NAMESPACE=$IMAGE_NAMESPACE" docker-tag.env
 
             echo "=== Pull and restart ==="
             docker compose pull
