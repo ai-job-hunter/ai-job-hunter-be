@@ -43,7 +43,8 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ./ai-job-hunter-be
+          context: .
+          file: ./Dockerfile
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:${{ github.event.workflow_run.head_sha }}
