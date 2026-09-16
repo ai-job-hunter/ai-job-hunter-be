@@ -19,6 +19,7 @@ env:
 permissions:
   contents: read
   packages: read
+  actions: read
 
 jobs:
   deploy:
@@ -39,6 +40,20 @@ jobs:
             echo "Not primary branch (${{ github.event.workflow_run.head_branch }}), skipping"
             exit 78
           fi
+
+      - name: Get commit info
+        id: commit
+        run: |
+          COMMIT_MSG=$(gh api repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }} --jq '.commit.message' | head -1)
+          echo "message=${COMMIT_MSG}" >> "$GITHUB_OUTPUT"
+          echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          echo "## 🚀 Deploy: ${{ env.IMAGE_PROJECT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: \`${{ steps.commit.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Message**: ${{ steps.commit.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: CI workflow on \`${{ github.event.workflow_run.head_branch }}\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Prepare image tag
         id: image_tag
