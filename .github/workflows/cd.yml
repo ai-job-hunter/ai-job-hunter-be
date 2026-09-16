@@ -89,15 +89,17 @@ jobs:
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+            echo "=== Update docker-tag.env ==="
+            TMPFILE=$(mktemp)
             {
               echo "IMAGE_TAG=$IMAGE_TAG"
               echo "IMAGE_NAMESPACE=$IMAGE_NAMESPACE"
               grep -v '^IMAGE_TAG=\|^IMAGE_NAMESPACE=' docker-tag.env
-            } > docker-tag.env.tmp && mv docker-tag.env.tmp docker-tag.env
+            } > "$TMPFILE" && mv "$TMPFILE" docker-tag.env
 
             echo "=== Pull and restart ==="
-            docker compose pull
-            docker compose up -d
+            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
+            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} up -d --no-deps ${{ env.COMPOSE_SERVICES }}
 
             echo "=== Done ==="
             docker compose ps
