@@ -2,7 +2,6 @@ package com.aijobhunter.agent;
 
 import com.aijobhunter.exception.AgentException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
@@ -16,11 +15,20 @@ import java.util.regex.Pattern;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public abstract class BaseAgent {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
+
+    public BaseAgent() {
+        this.chatClient = null;
+        this.objectMapper = null;
+    }
+
+    public BaseAgent(ChatClient chatClient, ObjectMapper objectMapper) {
+        this.chatClient = chatClient;
+        this.objectMapper = objectMapper;
+    }
 
     private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{\\{(\\w+)}}");
 

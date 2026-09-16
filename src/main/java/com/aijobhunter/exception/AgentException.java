@@ -20,6 +20,12 @@ public class AgentException extends RuntimeException {
         this.errorCode = "AGENT_ERROR";
     }
 
+    public AgentException(String agentType, Throwable cause) {
+        super(cause != null ? cause.getMessage() : "Unknown error", cause);
+        this.agentType = agentType;
+        this.errorCode = "AGENT_ERROR";
+    }
+
     public AgentException(String agentType, String errorCode, String message) {
         super(message);
         this.agentType = agentType;

@@ -22,6 +22,12 @@ repositories {
     mavenCentral()
 }
 
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.ai:spring-ai-bom:2.0.1'
+    }
+}
+
 dependencies {
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -47,7 +53,7 @@ dependencies {
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     
     // Spring AI (Agent 支持)
-    implementation 'org.springframework.ai:spring-ai-openai-spring-boot-starter'
+    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
     
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

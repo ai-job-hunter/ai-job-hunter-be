@@ -1,7 +1,9 @@
 package com.aijobhunter.agent;
 
 import com.aijobhunter.agent.model.ResumeAnalysisResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -11,6 +13,10 @@ import java.util.Map;
 @Slf4j
 @Service
 public class ResumeAgent extends BaseAgent {
+
+    public ResumeAgent(ChatClient chatClient, ObjectMapper objectMapper) {
+        super(chatClient, objectMapper);
+    }
 
     @Override
     protected AgentType getAgentType() { return AgentType.RESUME_ANALYSIS; }
