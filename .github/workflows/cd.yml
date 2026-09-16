@@ -59,7 +59,7 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: IMAGE_TAG,DEPLOY_PATH
+          envs: IMAGE_TAG,IMAGE_NAMESPACE,DEPLOY_PATH
           script: |
             set -e
             cd ${{ env.DEPLOY_PATH }}
@@ -68,6 +68,7 @@ jobs:
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             echo "IMAGE_TAG=$IMAGE_TAG" > docker-tag.env
+            echo "IMAGE_NAMESPACE=$IMAGE_NAMESPACE" >> docker-tag.env
 
             echo "=== Pull and restart ==="
             docker compose pull
