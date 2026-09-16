@@ -3,8 +3,9 @@
 name: CD
 
 on:
-  push:
-    branches: [master, main]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
 
 env:
   IMAGE_REGISTRY: ghcr.io
@@ -17,7 +18,7 @@ env:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
 
 jobs:
   deploy:
@@ -26,17 +27,23 @@ jobs:
     environment: production
 
     steps:
+      - name: Check CI status
+        if: ${{ github.event.workflow_run.conclusion != 'success' }}
+        run: |
+          echo "CI did not succeed, skipping deployment"
+          exit 78
+
       - name: Check deploy branch
         run: |
-          if [ "${{ github.ref_name }}" != "${{ env.DEPLOY_PRIMARY_BRANCH }}" ]; then
-            echo "Not primary branch, skipping"
+          if [ "${{ github.event.workflow_run.head_branch }}" != "${{ env.DEPLOY_PRIMARY_BRANCH }}" ]; then
+            echo "Not primary branch (${{ github.event.workflow_run.head_branch }}), skipping"
             exit 78
           fi
 
       - name: Prepare image tag
         id: image_tag
         run: |
-          echo "IMAGE_TAG=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "IMAGE_TAG=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Validate SSH key
         run: |
