@@ -47,7 +47,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:${{ github.event.workflow_run.head_sha }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:${{ github.run_id }}
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -112,26 +112,17 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: IMAGE_NAMESPACE,DEPLOY_PATH,COMPOSE_FILE,COMPOSE_SERVICES
+          envs: IMAGE_TAG,IMAGE_NAMESPACE,DEPLOY_PATH,COMPOSE_FILE,COMPOSE_SERVICES
           script: |
             set -e
             cd ${{ env.DEPLOY_PATH }}
-            IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
 
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo "=== Update docker-tag.env ==="
-            TMPFILE=$(mktemp)
-            {
-              echo "IMAGE_TAG=$IMAGE_TAG"
-              echo "IMAGE_NAMESPACE=$IMAGE_NAMESPACE"
-              grep -v '^IMAGE_TAG=\|^IMAGE_NAMESPACE=' docker-tag.env
-            } > "$TMPFILE" && mv "$TMPFILE" docker-tag.env
-
-            echo "=== Pull and restart ==="
-            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
-            docker compose --env-file .env -f ${{ env.COMPOSE_FILE }} up -d --no-deps ${{ env.COMPOSE_SERVICES }}
+            echo "=== Pull and restart (tag: $IMAGE_TAG) ==="
+            docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
+            docker compose -f ${{ env.COMPOSE_FILE }} up -d --no-deps ${{ env.COMPOSE_SERVICES }}
 
             echo "=== Done ==="
             docker compose ps
