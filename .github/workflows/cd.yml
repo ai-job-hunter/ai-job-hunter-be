@@ -121,12 +121,11 @@ jobs:
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             echo "=== Update docker-tag.env ==="
-            TMPFILE=$(mktemp)
             {
               echo "IMAGE_TAG=${IMAGE_TAG}"
               echo "IMAGE_NAMESPACE=${IMAGE_NAMESPACE}"
               grep -v '^IMAGE_TAG=\|^IMAGE_NAMESPACE=' docker-tag.env 2>/dev/null || true
-            } > "$TMPFILE" && mv "$TMPFILE" docker-tag.env
+            } | tee docker-tag.env > /dev/null
 
             echo "=== Pull and restart (tag: $IMAGE_TAG) ==="
             docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
