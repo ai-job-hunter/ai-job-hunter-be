@@ -132,14 +132,31 @@ jobs:
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo "=== Update docker-tag.env ==="
+            echo "=== Update docker-tag.env (最新在第一行，历史=注释追加在末尾) ==="
+            # 目标格式（与 docker-tag.env.example 对齐）：
+            #   IMAGE_NAMESPACE=ai-job-hunter
+            #   IMAGE_TAG=latest                              ← 唯一生效，docker-compose 取这行
+            #   # 历史版本（注释掉的为已废弃）
+            #   # IMAGE_TAG=ai-job-hunter-be-20260918144423  ← 历史（旧）
+            #   # IMAGE_TAG=ai-job-hunter-be-20260918150000  ← 历史（本次新追加）
             {
-              echo "IMAGE_TAG=${IMAGE_TAG}"
+              # 1) 第一行：namespace
               echo "IMAGE_NAMESPACE=${IMAGE_NAMESPACE}"
-              grep -v '^IMAGE_TAG=\|^IMAGE_NAMESPACE=' docker-tag.env 2>/dev/null || true
+              # 2) 第二行：生效的 latest（docker-compose 看到的第一个未注释 IMAGE_TAG=）
+              echo "IMAGE_TAG=latest"
+              # 3) 历史段标题，仅文件首次生成时写入
+              grep -q '^# 历史版本' docker-tag.env 2>/dev/null \
+                || echo "# 历史版本（注释掉的为已废弃）"
+              # 4) 旧的生效行 IMAGE_TAG=xxx 转成注释行（仅非 latest，避免自我重复）
+              grep -E '^IMAGE_TAG=' docker-tag.env 2>/dev/null \
+                | grep -v '^IMAGE_TAG=latest$' \
+                | sed 's/^IMAGE_TAG=/# IMAGE_TAG=/' \
+                | sort -u || true
+              # 5) 本次构建的具体 tag 追加到历史
+              echo "# IMAGE_TAG=${IMAGE_TAG}"
             } | tee docker-tag.env > /dev/null
 
-            echo "=== Pull and restart (tag: $IMAGE_TAG) ==="
+            echo "=== Pull and restart (tag: latest) ==="
             docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
             docker compose -f ${{ env.COMPOSE_FILE }} up -d --no-deps ${{ env.COMPOSE_SERVICES }}
 
