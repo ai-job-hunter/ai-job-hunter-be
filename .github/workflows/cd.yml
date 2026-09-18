@@ -117,8 +117,8 @@ jobs:
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.2.5
         env:
-            IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-            IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          IMAGE_NAMESPACE: ${{ env.IMAGE_NAMESPACE }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
