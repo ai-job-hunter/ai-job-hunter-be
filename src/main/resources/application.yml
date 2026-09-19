@@ -40,6 +40,16 @@ spring:
       password: ${REDIS_PASSWORD:}
       database: ${REDIS_DB:0}
 
+  # Spring AI: OpenAI ChatClient（由 spring-ai-starter-model-openai 自动装配 ChatClient.Builder）
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.openai.com}
+      chat:
+        options:
+          model: ${SPRING_AI_OPENAI_CHAT_MODEL:gpt-4o}
+          temperature: ${SPRING_AI_OPENAI_CHAT_TEMPERATURE:0.7}
+
   servlet:
     multipart:
       max-file-size: 10MB
