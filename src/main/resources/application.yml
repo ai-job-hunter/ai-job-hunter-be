@@ -6,9 +6,9 @@ spring:
     name: ai-job-hunter
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/aijobhunter
-    username: postgres
-    password: ${DATABASE_PASSWORD:postgres}
+    url: jdbc:postgresql://${PGSQL_HOST:localhost}:${PGSQL_PORT:5432}/${PGSQL_DB:job_hunter}?sslmode=${PGSQL_SSLMODE:disable}
+    username: ${PGSQL_USERNAME:postgres}
+    password: ${PGSQL_PASSWORD}
     driver-class-name: org.postgresql.Driver
   
   jpa:
@@ -21,10 +21,10 @@ spring:
   
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
-      database: 0
+      database: ${REDIS_DB:0}
 
   servlet:
     multipart:
