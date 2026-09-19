@@ -52,8 +52,8 @@ dependencies {
     // JSON
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     
-    // Spring AI (Agent 支持)
-    implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    // Spring AI (Agent 支持) - DeepSeek 接入
+    implementation 'org.springframework.ai:spring-ai-starter-model-deepseek'
     
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

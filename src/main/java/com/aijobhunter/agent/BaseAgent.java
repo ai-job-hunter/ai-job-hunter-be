@@ -38,7 +38,7 @@ public abstract class BaseAgent {
 
     public <T> AgentResult<T> execute(Map<String, Object> variables, Class<T> responseClass) {
         long startTime = System.currentTimeMillis();
-        String model = "gpt-4o";
+            String model = "deepseek-chat";
 
         try {
             String systemPrompt = getDefaultSystemPrompt();
