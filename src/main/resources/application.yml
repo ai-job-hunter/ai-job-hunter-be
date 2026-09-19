@@ -15,10 +15,24 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-  
+        default_schema: app
+        # JPA 自动建表时物理命名策略（驼峰转下划线，与 PostgreSQL 默认一致）
+        physical_naming_strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+
+  # Flyway：build.gradle 暂未引入 flyway-core，配置先注释。
+  # 后续若引入 Flyway，把下面注释打开，并建 src/main/resources/db/migration/V1__init.sql
+  # flyway:
+  #   enabled: true
+  #   baseline-on-migrate: true
+  #   schemas: app
+  #   default-schema: app
+  #   table: flyway_schema_history
+  #   locations: classpath:db/migration
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}
