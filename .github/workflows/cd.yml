@@ -150,7 +150,7 @@ jobs:
 
             echo "=== Pull and restart (tag: latest) ==="
             docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
-            docker compose -f ${{ env.COMPOSE_FILE }} up -d --no-deps ${{ env.COMPOSE_SERVICES }}
+            docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }}
 
             echo "=== Done ==="
             docker compose ps
