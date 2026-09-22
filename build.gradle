@@ -50,7 +50,9 @@ dependencies {
     annotationProcessor 'org.projectlombok:lombok'
     
     // JSON
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    // Spring Boot 4.x 默认引入 tools.jackson.core:jackson-databind:3.x（Jackson 3）
+    // ObjectMapper 类型为 tools.jackson.databind.ObjectMapper，由 Spring Boot 自动配置
+    // 不要显式声明 com.fasterxml.jackson.core:jackson-databind，会覆盖 Boot 4 的 Jackson 3 依赖
     
     // Spring AI (Agent 支持) - DeepSeek 接入
     implementation 'org.springframework.ai:spring-ai-starter-model-deepseek'
@@ -58,6 +60,14 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+
+    // Testcontainers（真实 PostgreSQL + Redis，与生产环境完全等价）
+    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'org.testcontainers:mysql'  // 若未来引入 MySQL 场景
+
+    // 注意：不再需要 H2 和 embedded-redis，改为 Testcontainers 跑真实 PostgreSQL
 }
 
 tasks.named('test') {

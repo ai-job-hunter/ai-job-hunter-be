@@ -379,7 +379,7 @@ Spring Boot
 | 层 | 技术 |
 |---|---|
 | Frontend | Vue 3 + TypeScript |
-| Backend | Spring Boot 3 + JDK 21 |
+| Backend | ~~Spring Boot 3 + JDK 21~~ Spring Boot 4.1.1 + JDK 21（变更日期：2026-09-22） |
 | Database | PostgreSQL 18 |
 | Vector | pgvector |
 | Cache | Redis |

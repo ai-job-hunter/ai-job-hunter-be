@@ -2,7 +2,7 @@ package com.aijobhunter.agent;
 
 import com.aijobhunter.agent.model.JdAnalysisResult;
 import com.aijobhunter.agent.model.MatchResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;

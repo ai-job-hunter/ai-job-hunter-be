@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-09-22 | v1.2 | 升级 Spring Boot 3 → 4.1.1（Jackson 2 → 3），修复 Agent 构造器注入歧义，新增 Testcontainers 冒烟测试（真实 PostgreSQL + Redis） | - |
 | 2026-09-06 | v1.1 | 架构调整：移除 Python BOSS Agent，Java 后端集成 Spring AI，V1 聚焦纯 AI 辅助能力 | - |
 
 ---
@@ -100,8 +101,8 @@ AI Agent 自动完成 BOSS 求职全流程
 | **前端** | Vue 3 + Nuxt 3 + TypeScript | 现代化前端框架 |
 | **前端 UI** | shadcn-vue | 组件库（个人品牌风格） |
 | **前端状态** | Pinia | 状态管理 |
-| **后端** | Spring Boot 3 + JDK 21 | 企业级后端框架 |
-| **后端** | Spring Boot 3 + JDK 21 + Spring AI | 企业级后端 + AI 能力 |
+| **后端** | ~~Spring Boot 3 + JDK 21~~ Spring Boot 4.1.1 + JDK 21 | 企业级后端框架（变更日期：2026-09-22，Jackson 2 → 3） |
+| **后端** | ~~Spring Boot 3 + JDK 21 + Spring AI~~ Spring Boot 4.1.1 + JDK 21 + Spring AI 2.0.1 | 企业级后端 + AI 能力 |
 | **数据库** | PostgreSQL 18 | 核心业务数据 |
 | **向量搜索** | pgvector | 简历-JD 语义匹配 |
 | **缓存** | Redis | 任务队列、缓存 |
@@ -133,7 +134,7 @@ Vue 3 + Nuxt 3 + shadcn-vue + TypeScript
 ## 3.2 后端模块 (ai-job-hunter-be)
 
 ```
-Spring Boot 3 + JDK 21 + Java
+~~Spring Boot 3 + JDK 21 + Java~~ **Spring Boot 4.1.1 + JDK 21 + Java**（变更日期：2026-09-22）
 ```
 
 **职责：**
@@ -604,3 +605,52 @@ ai-job-hunter/
 |-----|---------|
 | 后端（含 Agent） | `ai-job-hunter-be/` |
 | 前端 | `ai-job-hunter-fe/` |
+
+---
+
+# [变更] Spring Boot 3 → 4.1.1 + Jackson 3 迁移（2026-09-22）
+
+## 变更原因
+2026-09-22 部署失败：`Parameter 1 of constructor in com.aijobhunter.agent.ChatAgent required a bean of type 'com.fasterxml.jackson.databind.ObjectMapper' that could not be found.`
+
+根因：
+1. 项目使用的 Spring Boot 版本是 **4.1.1**（不是 3.x），Spring Boot 4 默认迁移到 `tools.jackson.core:jackson-databind:3.x`（Jackson 3），自动注册的 `ObjectMapper` 是 `tools.jackson.databind.ObjectMapper`，而非 `com.fasterxml.jackson.databind.ObjectMapper`（Jackson 2）。
+2. 项目代码全部使用 Jackson 2 的 import。
+3. CI 跑 `./gradlew test` 但 `src/test/` 是空目录，测试瞬间通过，错误逃逸到生产环境。
+
+## 包含代码
+- `build.gradle`：删除 `com.fasterxml.jackson.core:jackson-databind` 显式声明
+- `BaseAgent.java` 及 7 个 Agent 子类（`ChatAgent`、`GreetAgent`、`WeeklyReportAgent`、`ResumeRewriteAgent`、`JdAnalyzerAgent`、`MatchAgent`、`ResumeAgent`）：将 `import com.fasterxml.jackson.databind.ObjectMapper` 改为 `import tools.jackson.databind.ObjectMapper`
+- `BaseAgent.java`：删除无参构造器（死代码，曾导致 Spring 构造器注入歧义）
+- `ChatClientConfig.java`：删除手动注册的 Jackson 2 ObjectMapper Bean（改由 Spring Boot 4 自动配置提供 Jackson 3 ObjectMapper）
+- `src/test/java/com/aijobhunter/ContextLoadsTest.java`（新增）：Spring 上下文冒烟测试，使用 Testcontainers 启动真实 PostgreSQL 18 + Redis 7 容器，与生产环境完全等价
+- `src/test/resources/schema-test.sql`（新增）：PostgreSQL 测试数据库初始化脚本（建 `app` schema）
+- `build.gradle`：新增 Testcontainers 依赖（`testcontainers-bom`、`junit-jupiter`、`postgresql`）；移除 H2 和 embedded-redis
+- `.github/workflows/ci.yml`：重写 CI 任务（拆分 compile / test / smoke 三个任务；smoke 用 Testcontainers 跑真实 DB/Redis）
+
+## 影响范围
+- 所有 8 个 Agent 文件
+- CI 工作流
+- 测试基础设施
+
+## 变更前 vs 变更后
+
+### 变更前
+- Spring Boot 3.x，Jackson 2.x
+- CI 跑空 `./gradlew test` 直接通过，无 Bean 注入校验
+- 部署后启动失败，错误信息：`No qualifying bean of type 'com.fasterxml.jackson.databind.ObjectMapper'`
+
+### 变更后
+- Spring Boot 4.1.1，Jackson 3.x
+- CI 拆分为 compile（编译校验）+ test（单元测试）+ smoke（Testcontainers 真实 PostgreSQL + Redis）
+- `ContextLoadsTest` 强制 Spring 启动，所有 Bean 装配错误都会在 CI 阶段被抓到
+- smoke 环境与生产 docker-compose.yml 完全等价（PostgreSQL 18 + Redis 7）
+
+## 关键差异
+
+| 维度 | 新增 | 移除 | 修改 |
+|------|------|------|------|
+| 依赖 | Testcontainers（`testcontainers-bom`、`junit-jupiter`、`postgresql`） | H2、`embedded-redis`、`com.fasterxml.jackson.core:jackson-databind` | 无 |
+| 代码 | `ContextLoadsTest`（Testcontainers）、`schema-test.sql` | `ChatClientConfig` 中的 ObjectMapper Bean、`BaseAgent` 无参构造器 | 8 个 Agent 文件的 ObjectMapper import |
+| CI | smoke 任务（Testcontainers 真实 DB/Redis 冒烟） | 单个 `test` 任务 | 拆分为 compile / test / smoke 三个任务 |
+

@@ -1,10 +1,10 @@
 package com.aijobhunter.agent;
 
 import com.aijobhunter.exception.AgentException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -19,11 +19,6 @@ public abstract class BaseAgent {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
-
-    public BaseAgent() {
-        this.chatClient = null;
-        this.objectMapper = null;
-    }
 
     public BaseAgent(ChatClient chatClient, ObjectMapper objectMapper) {
         this.chatClient = chatClient;
