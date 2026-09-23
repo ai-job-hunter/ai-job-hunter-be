@@ -62,15 +62,14 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
 
     // Testcontainers（真实 PostgreSQL + Redis，与生产环境完全等价）
-    testImplementation platform('org.testcontainers:testcontainers-bom:1.20.4')
-    testImplementation 'org.testcontainers:junit-jupiter'
-    testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'org.testcontainers:mysql'  // 若未来引入 MySQL 场景
-
-    // Testcontainers 1.20+ 已不再 shade commons-io，ScriptUtils.runInitScript 仍依赖它
-    // （见 https://github.com/testcontainers/testcontainers-java/releases/tag/1.20.0 ）
-    // ContextLoadsTest 用 withInitScript("schema-test.sql") 初始化 schema，必须显式引入
-    testImplementation 'commons-io:commons-io:2.16.1'
+    // 整体升到 2.0.5 + 新坐标（org.testcontainers:testcontainers-*）；
+    // 此前混用 testcontainers:2.0.5 + 子模块 1.20.4 会触发 shaded jar 缺失
+    // （org.testcontainers.shaded.org.apache.commons.io.IOUtils 找不到）。
+    // ref: https://github.com/testcontainers/testcontainers-java/issues/11481
+    testImplementation platform('org.testcontainers:testcontainers-bom:2.0.5')
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-mysql'  // 若未来引入 MySQL 场景
 
     // 注意：不再需要 H2 和 embedded-redis，改为 Testcontainers 跑真实 PostgreSQL
 }
