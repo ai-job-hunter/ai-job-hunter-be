@@ -1,4 +1,26 @@
+# =============================================================================
 # AI Job Hunter Backend - CD Workflow
+#
+# 自动化能力：
+#   1. CI 通过后自动构建镜像并推送 GHCR
+#   2. main 分支自动部署到服务器
+#   3. 部署失败自动回滚到上一个 tag（重启容器即可，无需重新 pull）
+#   4. 部署成功/失败邮件通知（无需第三方，GitHub 原生支持）
+#   5. workflow_dispatch 手动触发重部署（指定 tag 可回滚到任意版本）
+#
+# 必需 Secrets（在 GitHub Repo → Settings → Secrets and variables → Actions）：
+#   - DEPLOY_SSH_KEY       SSH 私钥（用于连接部署服务器）
+#   - DEPLOY_HOST          服务器地址
+#   - DEPLOY_USER          SSH 用户名
+#   - DEPLOY_SSH_PORT      SSH 端口（可选，默认 22）
+#   - DEPLOY_PATH          服务器上的部署目录
+#   - NOTIFY_EMAIL         接收部署通知的邮箱（可选）
+#   - MAIL_USERNAME        发件邮箱（可选，推荐使用 noreply+github@qq.com 等别名）
+#   - MAIL_PASSWORD        发件邮箱授权码（QQ/163/Gmail 的 SMTP 授权码）
+#
+# 必需 Variables（Settings → Secrets and variables → Actions → Variables tab）：
+#   - DEPLOY_PRIMARY_BRANCH 可选，默认 main
+# =============================================================================
 
 name: CD
 
@@ -6,6 +28,18 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "要部署的镜像 tag（留空部署最新；指定则填纯时间戳，如 20260924153000）"
+        required: false
+        default: ""
+        type: string
+      reason:
+        description: "部署原因（会写进通知和升级日志）"
+        required: false
+        default: "手动触发"
+        type: string
 
 env:
   IMAGE_REGISTRY: ghcr.io
@@ -26,6 +60,7 @@ jobs:
   build:
     name: Build & Push Image
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
 
     outputs:
       image_tag: ${{ steps.vars.outputs.image_tag }}
@@ -46,8 +81,9 @@ jobs:
       - name: Extract variables
         id: vars
         run: |
-          # 镜像 tag 格式：服务名-年月日時分秒（如 ai-job-hunter-be-20250918103000）
-          echo "image_tag=$(echo '${{ env.IMAGE_PROJECT }}' | sed 's/_/-/g')-$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
+          # 镜像 tag 格式：纯时间戳（yyyyMMddHHmmss），如 20260924153000
+          # 不带前缀，因为仓库名 ghcr.io/owner/ai-job-hunter-be 已经能区分项目
+          echo "image_tag=$(date -u +%Y%m%d%H%M%S)" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -63,6 +99,7 @@ jobs:
 
       - name: Get commit info
         id: commit
+        if: ${{ github.event_name == 'workflow_run' }}
         run: |
           COMMIT_MSG=$(gh api repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }} --jq '.commit.message' 2>/dev/null | head -1)
           echo "message=${COMMIT_MSG}" >> "$GITHUB_OUTPUT"
@@ -70,12 +107,19 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## 🚀 Deploy: ${{ env.IMAGE_PROJECT }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit**: \`${{ steps.commit.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Message**: ${{ steps.commit.outputs.message }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Triggered by**: CI workflow on \`${{ github.event.workflow_run.head_branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Build: ${{ env.IMAGE_PROJECT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image tag**: \`${{ steps.vars.outputs.image_tag }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            echo "- **Commit**: \`${{ steps.commit.outputs.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- **Message**: ${{ steps.commit.outputs.message }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Triggered by**: CI workflow on \`${{ github.event.workflow_run.head_branch }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            REASON="${{ inputs.reason || '手动触发' }}"
+            echo "- **Triggered by**: manual dispatch" >> $GITHUB_STEP_SUMMARY
+            echo "- **Reason**: $REASON" >> $GITHUB_STEP_SUMMARY
+          fi
 
-  # ── Step 2: Deploy to server (only on main branch + CI passed) ─────────────
+  # ── Step 2: Deploy to server ───────────────────────────────────────────────
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
@@ -84,6 +128,7 @@ jobs:
 
     steps:
       - name: Set workflow run name from git commit
+        if: ${{ github.event_name == 'workflow_run' }}
         run: |
           set +e
           COMMIT_MSG=$(gh api repos/${{ github.repository }}/commits/${{ github.event.workflow_run.head_sha }} --jq '.commit.message' 2>/dev/null | head -1)
@@ -95,12 +140,13 @@ jobs:
             -f name="🚀 ${COMMIT_MSG%\\n*}" || true
 
       - name: Check CI status
-        if: ${{ github.event.workflow_run.conclusion != 'success' }}
+        if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success' }}
         run: |
           echo "CI did not succeed, skipping deployment"
           exit 78
 
       - name: Check deploy branch
+        if: ${{ github.event_name == 'workflow_run' }}
         run: |
           if [ "${{ github.event.workflow_run.head_branch }}" != "${{ env.DEPLOY_PRIMARY_BRANCH }}" ]; then
             echo "Not primary branch (${{ github.event.workflow_run.head_branch }}), skipping"
@@ -114,46 +160,175 @@ jobs:
           ssh-keygen -l -f ~/ssh_key
           echo "SSH key validated"
 
-      - name: Deploy to server
+      - name: Deploy to server (with auto-rollback)
+        id: deploy
         uses: appleboy/ssh-action@v1.2.5
+        env:
+          NEW_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          MANUAL_TAG: ${{ inputs.image_tag }}
+          REASON: ${{ inputs.reason || '自动部署' }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          envs: DEPLOY_PATH,COMPOSE_FILE,COMPOSE_SERVICES
+          envs: DEPLOY_PATH,COMPOSE_FILE,COMPOSE_SERVICES,NEW_IMAGE_TAG,MANUAL_TAG,REASON
           script: |
             set -e
+
             cd ${{ env.DEPLOY_PATH }}
 
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            echo "=== Update upgrade log (UPGRADE_LOG.md, 仅记录，不注入环境变量) ==="
-            # 目标格式：markdown 表格，按日期分段
-            #   # AI Job Hunter Backend 升级历史
-            #   ## 2026-09-19
-            #   | 时间 | 镜像 tag | 当前 |
-            #   |---|---|---|
-            #   | 21:00 | ai-job-hunter-be-20260919210000 | latest |
-            #   | 18:00 | ai-job-hunter-be-20260918180000 | 历史 |
-            TS=$(date -u +'%H:%M')
-            TAG=${{ needs.build.outputs.image_tag }}
-            if ! grep -qE "^## $(date -u +'%Y-%m-%d')" UPGRADE_LOG.md 2>/dev/null; then
-              echo "" >> UPGRADE_LOG.md
-              echo "## $(date -u +'%Y-%m-%d')" >> UPGRADE_LOG.md
-              echo "" >> UPGRADE_LOG.md
-              echo "| 时间 (UTC) | 镜像 tag | 当前 |" >> UPGRADE_LOG.md
-              echo "|---|---|---|" >> UPGRADE_LOG.md
+            # ── 1. 读取当前线上 tag（用于回滚）──────────────────────
+            CURRENT_TAG=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "")
+            if [ -z "$CURRENT_TAG" ] || [ "$CURRENT_TAG" = "latest" ]; then
+              # fallback: 从运行的容器反查
+              CURRENT_TAG=$(docker inspect ${{ env.COMPOSE_SERVICES }} --format='{{ index .Config.Image }}' 2>/dev/null | awk -F: '{print $NF}' || echo "")
             fi
-            echo "| $TS | \`$TAG\` | latest |" >> UPGRADE_LOG.md
+            echo "Current deployed tag: $CURRENT_TAG"
 
-            echo "=== Pull and restart (tag: latest) ==="
-            docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
-            docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }}
+            # ── 2. 决定要部署的 tag ─────────────────────────────────
+            if [ -n "${{ env.MANUAL_TAG }}" ]; then
+              DEPLOY_TAG="${{ env.MANUAL_TAG }}"
+              DEPLOY_MODE="manual"
+            else
+              DEPLOY_TAG="${{ env.NEW_IMAGE_TAG }}"
+              DEPLOY_MODE="auto"
+            fi
+            echo "Deploying tag: $DEPLOY_TAG (mode: $DEPLOY_MODE)"
 
-            echo "=== Done ==="
+            # ── 3. 更新升级日志 ─────────────────────────────────────
+            TS=$(date -u +'%H:%M')
+            TODAY=$(date -u +'%Y-%m-%d')
+            if ! grep -qE "^## $TODAY" UPGRADE_LOG.md 2>/dev/null; then
+              echo "" >> UPGRADE_LOG.md
+              echo "## $TODAY" >> UPGRADE_LOG.md
+              echo "" >> UPGRADE_LOG.md
+              echo "| 时间 (UTC) | 镜像 tag | 当前 | 备注 |" >> UPGRADE_LOG.md
+              echo "|---|---|---|---|" >> UPGRADE_LOG.md
+            fi
+            if [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
+              # 把旧 tag 标为「历史」
+              sed -i "/\`$CURRENT_TAG\`/ s/| latest |/| 历史 |/" UPGRADE_LOG.md 2>/dev/null || true
+            fi
+            echo "| $TS | \`$DEPLOY_TAG\` | latest | ${{ env.REASON }} |" >> UPGRADE_LOG.md
+
+            # ── 4. 更新 .env 中的 IMAGE_TAG ─────────────────────────
+            if grep -qE '^IMAGE_TAG=' .env 2>/dev/null; then
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$DEPLOY_TAG|" .env
+            else
+              echo "IMAGE_TAG=$DEPLOY_TAG" >> .env
+            fi
+
+            # ── 5. 拉取并启动新版本 ─────────────────────────────────
+            echo "=== Pull image: $DEPLOY_TAG ==="
+            IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
+
+            echo "=== Restart container ==="
+            IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }}
+
+            # ── 6. 健康检查（最多 90 秒）────────────────────────────
+            echo "=== Health check ==="
+            CONTAINER_NAME=${{ env.COMPOSE_SERVICES }}
+            HEALTHY=false
+            for i in $(seq 1 18); do
+              sleep 5
+              # 容器的 health status（Dockerfile 里配了 HEALTHCHECK）
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
+              RUNNING=$(docker inspect --format='{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo "false")
+              echo "  attempt $i: status=$STATUS running=$RUNNING"
+              if [ "$STATUS" = "healthy" ]; then
+                HEALTHY=true
+                break
+              fi
+              # 启动失败（容器停止）就提前结束
+              if [ "$RUNNING" = "false" ]; then
+                echo "  container stopped, exit early"
+                break
+              fi
+            done
+
+            # ── 7. 健康检查失败 → 自动回滚 ──────────────────────────
+            if [ "$HEALTHY" != "true" ] && [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
+              echo "=== ⚠️  HEALTH CHECK FAILED, ROLLING BACK TO $CURRENT_TAG ==="
+              ROLLBACK_RESULT=$(IMAGE_TAG=$CURRENT_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
+              echo "$ROLLBACK_RESULT"
+
+              # 等 30 秒看回滚后是否 healthy
+              sleep 30
+              ROLLBACK_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
+              echo "=== Rollback container status: $ROLLBACK_STATUS ==="
+
+              # 把 .env 的 IMAGE_TAG 也改回去
+              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$CURRENT_TAG|" .env
+
+              # 写回升级日志
+              echo "| $TS | \`$CURRENT_TAG\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md
+
+              # 输出回滚信息给 GitHub Actions
+              echo "ROLLBACK_NEEDED=true" >> $GITHUB_OUTPUT
+              echo "ROLLED_BACK_FROM=$DEPLOY_TAG" >> $GITHUB_OUTPUT
+              echo "ROLLED_BACK_TO=$CURRENT_TAG" >> $GITHUB_OUTPUT
+              exit 1
+            elif [ "$HEALTHY" != "true" ]; then
+              echo "=== ❌ Health check failed but no previous tag to roll back to ==="
+              echo "ROLLBACK_NEEDED=false" >> $GITHUB_OUTPUT
+              echo "HEALTH_FAILED=true" >> $GITHUB_OUTPUT
+              exit 1
+            fi
+
+            echo "=== ✅ Deploy successful ==="
             docker compose ps
 
+      - name: Notify success
+        if: ${{ steps.deploy.conclusion == 'success' }}
+        uses: dawidd6/action-email@v0.1.0
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: '✅ 部署成功: ${{ env.IMAGE_PROJECT }}'
+          body: |
+            AI Job Hunter Backend 部署成功 ✅
+
+            📦 镜像：${{ env.IMAGE_PROJECT }}:${{ needs.build.outputs.image_tag }}
+            🌿 分支：${{ github.event.workflow_run.head_branch || 'manual' }}
+            ⏰ 时间：${{ github.event.head_commit.timestamp || now() }}
+            🔗 Commit：${{ github.event.workflow_run.head_sha || 'manual' }}
+
+            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: GitHub Actions
+          content_type: text/plain
+          secure: true
+
+      - name: Notify failure (with rollback info)
+        if: ${{ failure() }}
+        uses: dawidd6/action-email@v0.1.0
+        with:
+          server_address: smtp.qq.com
+          server_port: 465
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: '❌ 部署失败: ${{ env.IMAGE_PROJECT }}'
+          body: |
+            AI Job Hunter Backend 部署失败 ❌
+
+            📦 新镜像：${{ needs.build.outputs.image_tag }}
+            🔄 回滚状态：${{ steps.deploy.outputs.ROLLED_BACK_TO || '未触发回滚' }}
+            ❌ 失败原因：${{ steps.deploy.outputs.HEALTH_FAILED }}
+
+            查看详情：
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: GitHub Actions
+          content_type: text/plain
+          secure: true
+        continue-on-error: true
+
       - name: Cleanup
+        if: always()
         run: rm -f ~/ssh_key
