@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-09-24 | v1.1 | 通知改用 GitHub Issue（去 SMTP 配置），自动去重告警 | orjrs |
 | 2026-09-24 | v1.0 | 初始版本（自动回滚 + 邮件通知 + 手动触发） | orjrs |
 
 ---
@@ -32,7 +33,7 @@ git push → CI 通过 → CD 自动构建镜像 → 推送 GHCR → SSH 到服�
 | 部署新 tag | `docker compose pull + up -d` |
 | 健康检查 | 最多 90 秒（18 × 5s），用 Docker 原生 `HEALTHCHECK` 状态 |
 | 失败回滚 | 健康检查不通过 → 用上一个 tag 重启容器 → `.env` 回写 → 升级日志记录 |
-| 邮件通知 | 失败时发邮件，包含回滚前后 tag |
+| 失败告警 | 自动创建 `cd-alert` Issue（含回滚信息），已存在则追加评论 |
 
 **回滚触发条件**：
 1. 新容器 90 秒内未进入 `healthy` 状态
@@ -51,14 +52,11 @@ git push → CI 通过 → CD 自动构建镜像 → 推送 GHCR → SSH 到服�
 | `DEPLOY_SSH_PORT` | SSH 端口（默认 22） |
 | `DEPLOY_PATH` | 服务器部署目录（如 `/opt/project/ai-job-hunter`） |
 
-### 可选（邮件通知）
-| Secret | 说明 |
-|---|---|
-| `NOTIFY_EMAIL` | 收件邮箱 |
-| `MAIL_USERNAME` | 发件邮箱（QQ 邮箱推荐 `xxx@qq.com`） |
-| `MAIL_PASSWORD` | SMTP 授权码（**不是登录密码**，需在邮箱后台生成） |
+### 通知机制（无需配置）
 
-**QQ 邮箱获取授权码**：设置 → 账户 → POP3/IMAP/SMTP/Exchange/CardDAV/CalDAV服务 → 开启 SMTP → 生成授权码
+CD 失败时 GitHub Actions 会自动在仓库创建告警 Issue（标签 `cd-alert`），通过 GitHub 自身的通知体系送达（站内 + 邮件订阅，无需任何 SMTP 配置）。
+
+如需订阅通知：`https://github.com/<owner>/ai-job-hunter-be/issues` → Watch → Custom → Issues
 
 ---
 
@@ -104,10 +102,11 @@ docker compose up -d ai-job-hunter-be
 - SSH 进去看日志：`docker logs ai-job-hunter-be --tail 100`
 - 看容器状态：`docker inspect ai-job-hunter-be | grep -A 5 State`
 
-### Q2：邮件没收到
-- 检查 Secrets 里 `NOTIFY_EMAIL`、`MAIL_USERNAME`、`MAIL_PASSWORD` 是否都配了
-- QQ 邮箱必须用授权码（不是登录密码）
-- 查垃圾邮件箱
+### Q2：部署失败告警
+- 失败时 GitHub 会自动创建 `cd-alert` 标签的 Issue
+- 如果已有同名 Issue 没关闭，会自动追加评论（去重）
+- 在 `https://github.com/<owner>/ai-job-hunter-be/issues` 可查看
+- 修复后请手动关闭 Issue
 
 ### Q3：回滚失败
 - 如果当前没有可回滚的 tag（首次部署失败），不会触发自动回滚

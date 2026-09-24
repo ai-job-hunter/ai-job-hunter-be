@@ -5,7 +5,7 @@
 #   1. CI 通过后自动构建镜像并推送 GHCR
 #   2. main 分支自动部署到服务器
 #   3. 部署失败自动回滚到上一个 tag（重启容器即可，无需重新 pull）
-#   4. 部署成功/失败邮件通知（无需第三方，GitHub 原生支持）
+#   4. 失败时自动创建 GitHub Issue 告警（含自动回滚信息）
 #   5. workflow_dispatch 手动触发重部署（指定 tag 可回滚到任意版本）
 #
 # 必需 Secrets（在 GitHub Repo → Settings → Secrets and variables → Actions）：
@@ -54,6 +54,7 @@ permissions:
   contents: read
   packages: write
   actions: write
+  issues: write  # 自动创建告警 Issue
 
 jobs:
   # ── Step 1: Build & Push Docker image to GHCR ──────────────────────────────
@@ -282,52 +283,57 @@ jobs:
             echo "=== ✅ Deploy successful ==="
             docker compose ps
 
-      - name: Notify success
-        if: ${{ steps.deploy.conclusion == 'success' }}
-        uses: dawidd6/action-email@v0.1.0
-        with:
-          server_address: smtp.qq.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: '✅ 部署成功: ${{ env.IMAGE_PROJECT }}'
-          body: |
-            AI Job Hunter Backend 部署成功 ✅
-
-            📦 镜像：${{ env.IMAGE_PROJECT }}:${{ needs.build.outputs.image_tag }}
-            🌿 分支：${{ github.event.workflow_run.head_branch || 'manual' }}
-            ⏰ 时间：${{ github.event.head_commit.timestamp || now() }}
-            🔗 Commit：${{ github.event.workflow_run.head_sha || 'manual' }}
-
-            Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.NOTIFY_EMAIL }}
-          from: GitHub Actions
-          content_type: text/plain
-          secure: true
-
-      - name: Notify failure (with rollback info)
+      - name: Notify failure (create GitHub Issue)
         if: ${{ failure() }}
-        uses: dawidd6/action-email@v0.1.0
-        with:
-          server_address: smtp.qq.com
-          server_port: 465
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: '❌ 部署失败: ${{ env.IMAGE_PROJECT }}'
-          body: |
-            AI Job Hunter Backend 部署失败 ❌
-
-            📦 新镜像：${{ needs.build.outputs.image_tag }}
-            🔄 回滚状态：${{ steps.deploy.outputs.ROLLED_BACK_TO || '未触发回滚' }}
-            ❌ 失败原因：${{ steps.deploy.outputs.HEALTH_FAILED }}
-
-            查看详情：
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          to: ${{ secrets.NOTIFY_EMAIL }}
-          from: GitHub Actions
-          content_type: text/plain
-          secure: true
         continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROJECT: ${{ env.IMAGE_PROJECT }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          ROLLED_BACK_TO: ${{ steps.deploy.outputs.ROLLED_BACK_TO || '未触发回滚' }}
+          HEALTH_FAILED: ${{ steps.deploy.outputs.HEALTH_FAILED || 'false' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          # 自动去重：查找是否已有未关闭的同类告警 issue
+          EXISTING=$(gh issue list \
+            --repo "${{ github.repository }}" \
+            --label "cd-alert" \
+            --state open \
+            --search "部署失败 in:title" \
+            --json number -q '.[0].number' 2>/dev/null || echo "")
+
+          BODY=$(cat <<EOF
+          ## ❌ 部署失败
+
+          | 字段 | 值 |
+          |---|---|
+          | 📦 项目 | \`${PROJECT}\` |
+          | 🏷️ 新镜像 | \`${IMAGE_TAG}\` |
+          | 🌿 分支 | \`${BRANCH}\` |
+          | 🔄 自动回滚到 | \`${ROLLED_BACK_TO}\` |
+          | ❌ 健康检查失败 | \`${HEALTH_FAILED}\` |
+
+          📋 查看运行日志：[点击查看](${RUN_URL})
+
+          ---
+          🤖 此 Issue 由 GitHub Actions 自动创建。修复后请手动关闭。
+          EOF
+          )
+
+          if [ -n "$EXISTING" ]; then
+            echo "已存在告警 issue #$EXISTING，追加评论"
+            gh issue comment "$EXISTING" \
+              --repo "${{ github.repository }}" \
+              --body "$BODY"
+          else
+            echo "创建新告警 issue"
+            gh issue create \
+              --repo "${{ github.repository }}" \
+              --title "❌ 部署失败: ${PROJECT} @ ${BRANCH}" \
+              --label "cd-alert" \
+              --body "$BODY"
+          fi
 
       - name: Cleanup
         if: always()
