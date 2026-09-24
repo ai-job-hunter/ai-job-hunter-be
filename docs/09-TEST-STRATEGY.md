@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-09-23 | v1.1 | 同步 Testcontainers 2.0.5 集成测试方案（见 §2.2.2、§4.2） | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
@@ -65,9 +66,37 @@
 | 项目 | 说明 |
 |-----|------|
 | 测试对象 | API 接口、数据库操作、缓存操作 |
-| 测试框架 | Spring Boot Test + Testcontainers |
-| 运行频率 | 每日构建 |
-| 覆盖范围 | 所有 API 端点 |
+| 测试框架 | Spring Boot Test + **Testcontainers 2.0.5**（真实 PostgreSQL + Redis 容器，与生产环境完全等价） |
+| 运行频率 | 每次 push 到 main / PR 时由 CI 的 `compile` → `test` → `smoke` 三阶段触发 |
+| 覆盖范围 | 关键 API 端点 + Spring 上下文冒烟（`ContextLoadsTest`） |
+
+#### 2.2.2.1 Testcontainers 依赖约束
+
+`build.gradle` 统一使用 `org.testcontainers:testcontainers-bom:2.0.5`，**所有子模块必须同步 2.x**，否则会触发 `org.testcontainers.shaded.*` 类缺失导致 `NoClassDefFoundError`：
+
+| 子模块 | 坐标（2.x 新格式） | 旧坐标（1.x，已废弃） |
+|--------|--------------------|------------------------|
+| JUnit Jupiter 集成 | `org.testcontainers:testcontainers-junit-jupiter` | `org.testcontainers:junit-jupiter` |
+| PostgreSQL | `org.testcontainers:testcontainers-postgresql` | `org.testcontainers:postgresql` |
+| MySQL | `org.testcontainers:testcontainers-mysql` | `org.testcontainers:mysql` |
+
+容器类包名也变了：`org.testcontainers.containers.PostgreSQLContainer`（1.x，有 `<SELF>` 泛型）→ `org.testcontainers.postgresql.PostgreSQLContainer`（2.x，无泛型，final class）。
+
+> **历史教训**：2026-09-23 修复 commit `126737d`/`fix(be): 统一升级 Testcontainers 到 2.0.5` 就是因为 Spring Boot 4.1.1 的 `spring-boot-starter-test` 间接拉入了 `testcontainers:2.0.5` (core)，但 BOM 仍把子模块固定在 `1.20.4`，造成 core / module 版本错配。详细背景见 [Issue #11481](https://github.com/testcontainers/testcontainers-java/issues/11481)。
+
+#### 2.2.2.2 ContextLoadsTest 冒烟测试
+
+唯一必须存在的集成测试 `com.aijobhunter.ContextLoadsTest`，目的：CI 强制启动 Spring 上下文，校验所有 `@Service` / `@Configuration` 的 Bean 都能成功注入。
+
+| 项 | 值 |
+|----|----|
+| 测试基类 | `@SpringBootTest(webEnvironment = RANDOM_PORT)` |
+| 容器启动 | `static` 块，`postgres.start()` + `redis.start()` |
+| Property 注入 | `@DynamicPropertySource`，把容器 host/port 注入 `spring.datasource.*` 和 `spring.data.redis.*` |
+| 启动镜像 | `postgres:18-alpine`（与生产 `docker-compose.yml` 一致）、`redis:7-alpine` |
+| Schema 初始化 | `withInitScript("schema-test.sql")`（仅创建 `app` schema，JPA `ddl-auto=update` 自动建表） |
+
+**禁止绕过此测试**：业务代码启动报错会立即失败，阻断 CD；任何"测试 0 个就静默成功"的失效场景由本测试兜底（历史背景：2026-09-22 `ChatAgent` 启动时报 `Parameter 1 of constructor required a bean of type 'ObjectMapper'`）。
 
 ### 2.2.3 E2E 测试
 
@@ -243,6 +272,8 @@
 | Dev | 开发自测 | 模拟数据 | 可随意操作 |
 | Test | 功能测试 | 脱敏真实数据 | 独立数据库 |
 | Staging | 预发布 | 生产数据副本 | 与生产一致 |
+
+> **Testcontainers 镜像对齐约定**：集成测试中 Testcontainers 拉取的镜像必须与 `docker-compose.yml` 生产配置严格一致（`postgres:18-alpine`、`redis:7-alpine`）。镜像不一致会导致测试通过但生产失败。每次升级中间件版本时，必须先改 `docker-compose.yml` → 再同步 Testcontainers 镜像 tag → 再跑 `ContextLoadsTest` 验证。
 
 ---
 
@@ -530,7 +561,9 @@ jobs:
 |-----|------|
 | JUnit 5 | Java 单元测试 |
 | Mockito | Mock 框架 |
-| Testcontainers | 容器化测试数据库 |
+| Testcontainers | 容器化测试数据库（2.0.5，BOM 统一管控） |
+| Testcontainers PostgreSQL | PostgreSQL 容器模块（`org.testcontainers:testcontainers-postgresql`） |
+| Testcontainers JUnit Jupiter | JUnit 5 集成（`org.testcontainers:testcontainers-junit-jupiter`） |
 | Playwright | E2E 测试 |
 | JaCoCo | 覆盖率统计 |
 | SonarQube | 代码质量检查 |
