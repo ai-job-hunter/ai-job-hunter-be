@@ -13,10 +13,7 @@
 #   - DEPLOY_HOST          服务器地址
 #   - DEPLOY_USER          SSH 用户名
 #   - DEPLOY_SSH_PORT      SSH 端口（可选，默认 22）
-#   - DEPLOY_PATH          服务器上的部署目录
-#   - NOTIFY_EMAIL         接收部署通知的邮箱（可选）
-#   - MAIL_USERNAME        发件邮箱（可选，推荐使用 noreply+github@qq.com 等别名）
-#   - MAIL_PASSWORD        发件邮箱授权码（QQ/163/Gmail 的 SMTP 授权码）
+#   - DEPLOY_PATH          服务器上的部署目录 
 #
 # 必需 Variables（Settings → Secrets and variables → Actions → Variables tab）：
 #   - DEPLOY_PRIMARY_BRANCH 可选，默认 main
