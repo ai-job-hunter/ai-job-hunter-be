@@ -53,7 +53,7 @@ on:
 env:
   IMAGE_REGISTRY: ghcr.io
   IMAGE_NAMESPACE: ${{ github.repository_owner }}
-  IMAGE_PROJECT: ai-job-hunter-be
+  IMAGE_PROJECT: be
   COMPOSE_FILE: docker-compose.yml
   COMPOSE_SERVICES: ai-job-hunter-be
   DEPLOY_PRIMARY_BRANCH: ${{ vars.DEPLOY_PRIMARY_BRANCH || 'main' }}
