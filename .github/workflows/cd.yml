@@ -13,10 +13,22 @@
 #   - DEPLOY_HOST          服务器地址
 #   - DEPLOY_USER          SSH 用户名
 #   - DEPLOY_SSH_PORT      SSH 端口（可选，默认 22）
-#   - DEPLOY_PATH          服务器上的部署目录 
+#   - DEPLOY_PATH          服务器上的部署目录
 #
 # 必需 Variables（Settings → Secrets and variables → Actions → Variables tab）：
 #   - DEPLOY_PRIMARY_BRANCH 可选，默认 main
+#
+# 边界声明（按 .cursor/rules/global-coding.mdc §4 + 用户约束）：
+#   - AI 助手只改 git tracked 代码 / 文档；服务器上的 .env 不允许 AI 直接读写。
+#   - 本 workflow 通过 UPGRADE_LOG.md 记录镜像 tag 历史，不写 .env（废弃 IMAGE_TAG 约定）。
+#     其它真实密钥（PGSQL_PASSWORD / JWT_SECRET / ENCRYPTION_KEY / DEEPSEEK_API_KEY）
+#     只能由运维手工编辑，且首装必须人工 ssh 完成。
+#   - 详见 docs/10-DEPLOYMENT.md §「边界声明」与 §0「变更记录」。
+#
+# 变更记录（按 .cursor/rules/global-coding.mdc §2 同步 docs/10-DEPLOYMENT.md）：
+#   - 2026-09-28  fix: 三处 sed -i 改 tee 原子写入，规避
+#                       "couldn't open temporary file ./seda96rCm: Permission denied"
+#                       （详见 docs/10-DEPLOYMENT.md §5 末尾「工作流踩坑」）
 # =============================================================================
 
 name: CD
@@ -180,7 +192,12 @@ jobs:
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             # ── 1. 读取当前线上 tag（用于回滚）──────────────────────
-            CURRENT_TAG=$(grep -E '^IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2 | tr -d '"' || echo "")
+            # 读 UPGRADE_LOG.md 第一条 | latest | 行，提取镜像 tag。
+            # 不读 .env（docker-tag.env 约定已废弃，IMAGE_TAG 不再维护）。
+            CURRENT_TAG=$(grep '| latest |' UPGRADE_LOG.md 2>/dev/null \
+              | head -1 \
+              | sed -n 's/.*`\([^`]*\)`.*/\1/p' \
+              | tr -d ' ' || echo "")
             if [ -z "$CURRENT_TAG" ] || [ "$CURRENT_TAG" = "latest" ]; then
               # fallback: 从运行的容器反查
               CURRENT_TAG=$(docker inspect ${{ env.COMPOSE_SERVICES }} --format='{{ index .Config.Image }}' 2>/dev/null | awk -F: '{print $NF}' || echo "")
@@ -208,19 +225,18 @@ jobs:
               echo "|---|---|---|---|" >> UPGRADE_LOG.md
             fi
             if [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
-              # 把旧 tag 标为「历史」
-              sed -i "/\`$CURRENT_TAG\`/ s/| latest |/| 历史 |/" UPGRADE_LOG.md 2>/dev/null || true
+              # 把旧 tag 标为「历史」—— 用 awk 流式处理后通过 tee 写回
+              # （不要用 sed -i，临时文件落到当前目录，部署用户常无写权限）
+              if grep -qF "\`$CURRENT_TAG\`" UPGRADE_LOG.md 2>/dev/null; then
+                awk -v tag="$CURRENT_TAG" '
+                  index($0, "`" tag "`") > 0 { sub(/\| latest \|/, "| 历史 |") }
+                  { print }
+                ' UPGRADE_LOG.md | tee UPGRADE_LOG.md > /dev/null
+              fi
             fi
             echo "| $TS | \`$DEPLOY_TAG\` | latest | ${{ env.REASON }} |" >> UPGRADE_LOG.md
 
-            # ── 4. 更新 .env 中的 IMAGE_TAG ─────────────────────────
-            if grep -qE '^IMAGE_TAG=' .env 2>/dev/null; then
-              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$DEPLOY_TAG|" .env
-            else
-              echo "IMAGE_TAG=$DEPLOY_TAG" >> .env
-            fi
-
-            # ── 5. 拉取并启动新版本 ─────────────────────────────────
+            # ── 4. 拉取并启动新版本 ─────────────────────────────────
             echo "=== Pull image: $DEPLOY_TAG ==="
             IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
 
@@ -258,9 +274,6 @@ jobs:
               sleep 30
               ROLLBACK_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
               echo "=== Rollback container status: $ROLLBACK_STATUS ==="
-
-              # 把 .env 的 IMAGE_TAG 也改回去
-              sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=$CURRENT_TAG|" .env
 
               # 写回升级日志
               echo "| $TS | \`$CURRENT_TAG\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md

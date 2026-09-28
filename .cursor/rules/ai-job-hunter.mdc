@@ -1,0 +1,92 @@
+# AI Job Hunter - Cursor 项目级规则
+
+> 本文件是 ai-job-hunter 单仓库的项目级规则，会覆盖（且**必须服从**）
+> 用户级全局规则 `/Users/liujun/.cursor/rules/global-coding.mdc`。
+
+---
+
+## 1. AI 与远程服务器的边界（强制）
+
+> **AI 助手（含 Cursor / Codex / Agent 自动化）不允许直接读写远程服务器上的任何 `.env` 文件、任何含密钥的配置、或远程 `docker-compose.yml`。**
+
+### 1.1 禁止行为（红线）
+
+- ❌ AI 直连 SSH 写 **远程** `.env`（即使是 `tee`、`cat << EOF`、文件复制、scp 都禁止）
+- ❌ AI 读取**远程** `.env` 后，把内容（哪怕脱敏后）回显到 chat、commit message、`docs/`、`UPGRADE_LOG.md`
+- ❌ AI 通过推断历史回滚逻辑，反推 `IMAGE_TAG`、反推 `JWT_SECRET` 等敏感值
+- ❌ AI 改远程 `docker-compose.yml` / `traefik` 路由 / `Portainer` label（这些由运维手工管理）
+
+### 1.2 允许行为（白名单）
+
+| 对象 | 谁改 | 路径 |
+|---|---|---|
+| git tracked 代码 / 文档 | AI / 开发者 | 本地改 → `git commit` → push → CI |
+| `.env.example`（仅占位符） | AI / 开发者 | git 提交，不含真实值；用 `change_me_to_xxx` 占位 |
+| 服务器 `UPGRADE_LOG.md`（镜像 tag 历史） | **仅 CI 自动化** | 通过 `.github/workflows/cd.yml` 的 append-only 日志步骤写入 |
+| 服务器 `.env` 的任何字段 | **人工** | `ssh deploy@...` + `vim` / `vi`；废弃 `IMAGE_TAG` 约定，CD **不写** `.env` |
+| 服务器 `docker-compose.yml` / 网络 / Traefik label | **人工** | `ssh` + 手工编辑 |
+| 服务器 `docker-tag.env` | **废弃** | 已废弃，不维护 |
+
+### 1.3 为什么这样规定
+
+- `.env` 必含真实密钥：`PGSQL_PASSWORD` / `JWT_SECRET` / `ENCRYPTION_KEY` / `DEEPSEEK_API_KEY` 等 5+ 项（参考 `.env.example`）
+- 部署目录 `/opt/project/ai-job-hunter/` 由 root 拥有，SSH 用户无写权限是有意为之——若 AI 改 `.env` 必然伴随违规提权
+- cd.yml 中的 `tee` 写法**是 CI 安全做法**，与"AI 直连"是不同的事情；不可以借 CI 的名义让 AI 改 `.env`
+- 全局规则 `global-coding.mdc` §4 也强调「真实配置在 GitHub Secrets 或本地 `.env`（git 忽略）」，本规则与该条对齐
+
+### 1.4 触发条件检查清单
+
+> 每次准备「往服务器写文件」前，自查以下 5 问；任意一条命中就**拒绝执行**并提示用户人工处理：
+
+1. 这个文件是 `.env` 或包含 `PASSWORD` / `SECRET` / `KEY` / `TOKEN` 吗？
+2. 这个文件或内容会在远程服务器上被改吗？
+3. 我是用 `ssh` / `scp` / `rsync` 直连远程吗？
+4. 我是不是在跑一个被 CI 已经合法完成的步骤（防止重复/越界）？
+5. 用户当前是否**明确**让我做？（默认不允许）
+
+如果 5 问全是「否」，且不属于 §1.2 白名单的 CI 自动化场景 → **转人工**。
+
+---
+
+## 2. 文档与代码同步
+
+继承全局规则 `global-coding.mdc` §1：本仓库的代码改动必须同步 `docs/`。
+
+具体映射（按仓库约定补充）：
+
+| 代码改动 | 必改文档 |
+|---|---|
+| `.github/workflows/cd.yml` | `docs/10-DEPLOYMENT.md` |
+| `.github/workflows/ci.yml` | `docs/09-TEST-STRATEGY.md` + `docs/10-DEPLOYMENT.md` |
+| `src/main/resources/application.yml` | `docs/02-TDS.md` + `docs/05-API-SPECIFICATION.md`（如果改了端口） |
+| `src/main/resources/db/init.sql` 或 Flyway | `docs/04-ER-DESIGN.md` |
+| `.env.example` | `docs/10-DEPLOYMENT.md` §3（Secrets 配置） |
+| `docker-compose.yml` | `docs/10-DEPLOYMENT.md` §1 + `docs/02-TDS.md` §基础设施 |
+| `scripts/postgres-init/` | `docs/04-ER-DESIGN.md` §扩展说明 |
+| `Dockerfile` | `docs/02-TDS.md` §构建规范 |
+
+---
+
+## 3. 工作流相关脚手架（不可混用）
+
+| 位置 | 谁维护 |
+|---|---|
+| `~/.cursor/skills/deploy/SKILL.md` | 全局 skill，已被本仓库 CD workflow 沿用「tee 原子写入」惯例 |
+| `~/.cursor/skills/github-cicd-template/SKILL.md` | 全局 skill，§L156-168 的「tee 写入 docker-tag.env」是本仓库 §1.2 「IMAGE_TAG 改写」的范本 |
+| 仓库级规则（本文件） | ai-job-hunter 独有约束 |
+
+---
+
+## 4. git 提交规范（继承全局 §3）
+
+- Conventional Commits（feat / fix / refactor / docs / chore / style / perf / test）
+- AI 生成 commit message 后**只给文本**，**不**自动 `git commit`
+- 开发者本人确认后再提交
+
+---
+
+## 5. 变更记录
+
+| 日期 | 版本 | 变更摘要 | 负责人 |
+|---|---|---|---|
+| 2026-09-28 | v1.0 | 初次建立：明确 AI 不写远程 .env 的红线，绑定文档/代码同步约定 | orjrs |
