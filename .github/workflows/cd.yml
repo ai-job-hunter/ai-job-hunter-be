@@ -200,7 +200,8 @@ jobs:
               DEPLOY_TAG="${{ env.MANUAL_TAG }}"
               DEPLOY_MODE="manual"
             else
-              DEPLOY_TAG="${{ env.NEW_IMAGE_TAG }}"
+              # 自动模式：CI 成功后已更新 GHCR :latest，直接用 latest
+              DEPLOY_TAG="latest"
               DEPLOY_MODE="auto"
             fi
             echo "Deploying tag: $DEPLOY_TAG (mode: $DEPLOY_MODE)"
