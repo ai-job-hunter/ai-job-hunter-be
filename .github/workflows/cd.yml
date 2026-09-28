@@ -190,17 +190,9 @@ jobs:
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # ── 1. 读取当前线上 tag（用于回滚）──────────────────────
-            # 读 UPGRADE_LOG.md 第一条 | latest | 行，提取镜像 tag。
-            # 不读 .env（docker-tag.env 约定已废弃，IMAGE_TAG 不再维护）。
-            CURRENT_TAG=$(grep '| latest |' UPGRADE_LOG.md 2>/dev/null \
-              | head -1 \
-              | sed -n 's/.*`\([^`]*\)`.*/\1/p' \
-              | tr -d ' ' || echo "")
-            if [ -z "$CURRENT_TAG" ] || [ "$CURRENT_TAG" = "latest" ]; then
-              # fallback: 从运行的容器反查
-              CURRENT_TAG=$(docker inspect ${{ env.COMPOSE_SERVICES }} --format='{{ index .Config.Image }}' 2>/dev/null | awk -F: '{print $NF}' || echo "")
-            fi
+            # ── 1. 记录当前版本（仅用于日志，不用于回滚）──────────────
+            # 从运行的容器反查当前使用的 tag
+            CURRENT_TAG=$(docker inspect ${{ env.COMPOSE_SERVICES }} --format='{{ index .Config.Image }}' 2>/dev/null | awk -F: '{print $NF}' || echo "unknown")
             echo "Current deployed tag: $CURRENT_TAG"
 
             # ── 2. 决定要部署的 tag ─────────────────────────────────
@@ -264,9 +256,10 @@ jobs:
             done
 
             # ── 7. 健康检查失败 → 自动回滚 ──────────────────────────
-            if [ "$HEALTHY" != "true" ] && [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
-              echo "=== ⚠️  HEALTH CHECK FAILED, ROLLING BACK TO $CURRENT_TAG ==="
-              ROLLBACK_RESULT=$(IMAGE_TAG=$CURRENT_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
+            if [ "$HEALTHY" != "true" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
+              echo "=== ⚠️  HEALTH CHECK FAILED, ROLLING BACK TO :latest ==="
+              # 回滚固定用 :latest（GHCR 上永远指向最后一次成功部署的版本）
+              ROLLBACK_RESULT=$(IMAGE_TAG=latest docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
               echo "$ROLLBACK_RESULT"
 
               # 等 30 秒看回滚后是否 healthy
@@ -275,17 +268,8 @@ jobs:
               echo "=== Rollback container status: $ROLLBACK_STATUS ==="
 
               # 写回升级日志
-              echo "| $TS | \`$CURRENT_TAG\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md
+              echo "| $TS | \`latest\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md
 
-              # 把旧 tag 重新标回 latest（因为当前已经回滚到旧 tag）
-              awk -v tag="$CURRENT_TAG" '
-                index($0, "`" tag "`") > 0 { sub(/\| 历史 \|/, "| latest |") }
-                { print }
-              ' UPGRADE_LOG.md | tee UPGRADE_LOG.md > /dev/null
-
-              exit 1
-            elif [ "$HEALTHY" != "true" ]; then
-              echo "=== ❌ Health check failed but no previous tag to roll back to ==="
               exit 1
             fi
 
