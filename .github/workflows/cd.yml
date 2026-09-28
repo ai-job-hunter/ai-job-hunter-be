@@ -103,7 +103,6 @@ jobs:
           push: true
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:${{ steps.vars.outputs.image_tag }}
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -237,35 +236,11 @@ jobs:
             echo "| $TS | \`$DEPLOY_TAG\` | latest | ${{ env.REASON }} |" >> UPGRADE_LOG.md
 
             # ── 4. 拉取并启动新版本 ─────────────────────────────────
-            # 直接拉指定 tag 的镜像，避开 IMAGE_TAG 环境变量覆盖 .env 的不确定性
-            # （appleboy/ssh-action 传递变量时 ${{ }} 模板语法可能未被 substitution，
-            #   导致 IMAGE_TAG=latest 而非预期的 $DEPLOY_TAG）
-            FULL_IMAGE="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:$DEPLOY_TAG"
-            echo "=== Pull image: $FULL_IMAGE ==="
-            docker pull "$FULL_IMAGE"
-
-            echo "=== Update compose file image tag (in-place, no sed -i temp file) ==="
-            # 把 compose 文件里 ai-job-hunter-be 的 image 行改成目标 tag
-            # 用 awk + tee 原子写入（不建临时文件，避免权限问题）
-            awk -v svc="${{ env.COMPOSE_SERVICES }}" -v img="$FULL_IMAGE" '
-              $1 == svc ":" {
-                print $0
-                getline
-                while ($0 ~ /^[[:space:]]+image:/) {
-                  sub(/image:.*/, "image: " img)
-                  print
-                  if ((svc ":") in seen) {} # no-op, avoid duplicate detection
-                  getline
-                }
-                # fall through to print rest
-              }
-              { print }
-            ' ${{ env.COMPOSE_FILE }} | tee ${{ env.COMPOSE_FILE }} > /dev/null
+            echo "=== Pull image: $DEPLOY_TAG ==="
+            IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
 
             echo "=== Restart container ==="
-            # --pull=never：compose 不再重新拉镜像，使用上面已 pull 的 tag
-            docker compose -f ${{ env.COMPOSE_FILE }} up -d \
-              --pull=never --remove-orphans ${{ env.COMPOSE_SERVICES }}
+            IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }}
 
             # ── 6. 健康检查（最多 90 秒）────────────────────────────
             echo "=== Health check ==="
@@ -291,26 +266,7 @@ jobs:
             # ── 7. 健康检查失败 → 自动回滚 ──────────────────────────
             if [ "$HEALTHY" != "true" ] && [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
               echo "=== ⚠️  HEALTH CHECK FAILED, ROLLING BACK TO $CURRENT_TAG ==="
-
-              # 同 §4 逻辑：显式 pull 回滚 tag，sed compose 文件，用 --pull=never
-              ROLLBACK_IMAGE="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:$CURRENT_TAG"
-              docker pull "$ROLLBACK_IMAGE"
-
-              awk -v svc="${{ env.COMPOSE_SERVICES }}" -v img="$ROLLBACK_IMAGE" '
-                $1 == svc ":" {
-                  print $0
-                  getline
-                  while ($0 ~ /^[[:space:]]+image:/) {
-                    sub(/image:.*/, "image: " img)
-                    print
-                    getline
-                  }
-                }
-                { print }
-              ' ${{ env.COMPOSE_FILE }} | tee ${{ env.COMPOSE_FILE }} > /dev/null
-
-              ROLLBACK_RESULT=$(docker compose -f ${{ env.COMPOSE_FILE }} up -d \
-                --pull=never --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
+              ROLLBACK_RESULT=$(IMAGE_TAG=$CURRENT_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
               echo "$ROLLBACK_RESULT"
 
               # 等 30 秒看回滚后是否 healthy
@@ -332,6 +288,12 @@ jobs:
               echo "=== ❌ Health check failed but no previous tag to roll back to ==="
               exit 1
             fi
+
+            # ── 8. 部署成功：把正确的 tag 打回 :latest ───────────────
+            echo "=== Tagging $DEPLOY_TAG as :latest on GHCR ==="
+            FULL_IMAGE="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:$DEPLOY_TAG"
+            docker tag "$FULL_IMAGE" "ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:latest"
+            docker push "ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:latest"
 
             echo "=== ✅ Deploy successful ==="
             docker compose ps
