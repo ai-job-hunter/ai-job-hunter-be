@@ -708,7 +708,7 @@ import {
 
 | 环境 | 怎么启动 | `API_BASE` | 浏览器实际请求 |
 |------|----------|------------|----------------|
-| 本地开发 | `npm run dev`（:3000） | `http://localhost:8080` | `http://localhost:8080/api/v1/...` |
+| 本地开发 | `npm run dev`（:3000） | **空字符串** | `/api/v1/...`（Vite 代理到本机 8080） |
 | 生产镜像 | Dockerfile 构建 | **空字符串** | `https://<DOMAIN>/api/v1/...`（同源，Nginx 反代） |
 
 生产链路：

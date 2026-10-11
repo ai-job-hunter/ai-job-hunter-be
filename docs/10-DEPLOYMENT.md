@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-12 | v1.5 | 删除后端 CORS（方案 A 同源 + 本地 Nuxt 代理），避免 Origin 白名单 403 | orjrs |
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
 | 2026-09-28 | v1.2 | fix：三处 `sed -i` 改 `tee` 原子写入；加 §0 边界声明；详见 §5「工作流踩坑」 | orjrs |
@@ -215,6 +216,14 @@ IMAGE_TAG=<旧tag> docker compose up -d ai-job-hunter-be
 ---
 
 ## 5. 常见问题
+
+### Q0b：注册/登录 Nginx 日志 403（方案 A 同源仍 403）
+
+**架构**：浏览器 → 同域 Nginx → 内网后端，**同源，不需要 CORS**。
+
+**旧因**：后端挂了过严的 `CorsConfigurationSource`（只允许 localhost），Spring 校验 `Origin` 头直接 403。
+
+**修复（v1.5）**：后端 **去掉 CORS**（`.cors(disable)`）；本地用 Nuxt `vite.server.proxy` 把 `/api` 转到 `8080`，与生产 Nginx 同思路。部署新 be（+ 如需则 fe）镜像后生效。
 
 ### Q0：域名打开是 502 Bad Gateway
 

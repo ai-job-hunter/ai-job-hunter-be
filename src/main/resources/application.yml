@@ -80,7 +80,7 @@ management:
     db:
       enabled: true
 
-# File Storage
+# File Storage（方案 A 同源 + 本地 Nuxt 代理，后端不配 CORS）
 app:
   upload:
     dir: ${UPLOAD_DIR:./uploads}
