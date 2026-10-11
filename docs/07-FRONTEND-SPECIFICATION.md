@@ -8,7 +8,28 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-11 | v1.1 | 对齐 cogniforge-web 方案 A：Nginx 同源反代 `/api`，构建时 `API_BASE=` | orjrs |
 | 2026-09-02 | v1.0 | 初始版本（Vue 3 + Nuxt 3 + shadcn-vue） | - |
+
+---
+
+## [变更] 对齐 cogniforge-web 方案 A 部署（2026-10-11）
+
+**变更原因**：生产部署与 cogniforge 相同——Traefik 只进前端，Nginx 反代 API；旧 `proxy_pass .../` 会剥掉 `/api` 前缀导致接口 404。
+
+**包含代码**：`ai-job-hunter-fe/nginx.conf`、`ai-job-hunter-fe/Dockerfile`、`ai-job-hunter-fe/docker-compose.yml`
+
+**影响范围**：生产域名访问链路、镜像构建参数、前端环境变量约定
+
+**变更前 vs 变更后**：
+
+| 项 | 变更前 | 变更后 |
+|---|---|---|
+| Nginx `/api/` | `proxy_pass http://ai-job-hunter-be:8080/`（剥前缀） | `proxy_pass http://ai-job-hunter-be:8080`（保留 `/api/v1/...`） |
+| 健康检查 | Dockerfile `HEALTHCHECK` + compose `--spider` | 仅 compose：`wget -qO- http://127.0.0.1:80/health` |
+| API 基址 | 文档写 `NUXT_PUBLIC_API_BASE=.../api/v1` | 生产构建 `API_BASE=`（同源）；本地 dev 用 `http://localhost:8080` |
+
+**关键差异**：新增 / 修改——与 cogniforge-web 一致的 gzip、长连接超时、`proxy_buffering off`；移除 Dockerfile 内 HEALTHCHECK。
 
 ---
 
@@ -679,20 +700,36 @@ import {
 
 ---
 
-# 十一、环境变量
+# 十一、环境变量与生产部署（方案 A）
 
-## 11.1 环境变量配置
+> 与 cogniforge-web 相同：Traefik → 前端 Nginx:80 → `/api/*` → 后端容器。
 
-```env
-# .env
-NUXT_PUBLIC_API_BASE=http://localhost:8080/api/v1
+## 11.1 API 基址约定
+
+| 环境 | 怎么启动 | `API_BASE` | 浏览器实际请求 |
+|------|----------|------------|----------------|
+| 本地开发 | `npm run dev`（:3000） | `http://localhost:8080` | `http://localhost:8080/api/v1/...` |
+| 生产镜像 | Dockerfile 构建 | **空字符串** | `https://<DOMAIN>/api/v1/...`（同源，Nginx 反代） |
+
+生产链路：
+
 ```
+浏览器 → Traefik → frontend:80（Nginx）
+                         └─ location /api/ → ai-job-hunter-be:8080
+```
+
+注意：
+
+- 接口路径本身已带 `/api/v1/...`，`API_BASE` 只表示前面的源（协议+主机），**不要**再写成 `/api`
+- 静态镜像没有运行时 Nuxt 配置，compose 里写 `NUXT_PUBLIC_API_BASE` **不会**改已构建的 JS
+- ~~`NUXT_PUBLIC_API_BASE=http://localhost:8080/api/v1`~~（2026-10-11）：生产禁止；本地用 `API_BASE=http://localhost:8080`
 
 ## 11.2 使用
 
 ```typescript
 const config = useRuntimeConfig()
 const apiBase = config.public.apiBase
+// $fetch('/api/v1/auth/login', { baseURL: apiBase || undefined })
 ```
 
 ---
