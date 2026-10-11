@@ -1,14 +1,21 @@
 # =============================================================================
 # AI Job Hunter - Docker Compose 配置（生产环境）
-# 说明：
-#   - DB/Redis 使用 /opt/project/envs/db.env 中的公用基础设施
-#   - 应用服务只包含 api-server 和 agent
-#   - 本地开发用 docker-compose.dev.yml（包含 DB）
+# 部署位置：/opt/project/ai-job-hunter/docker-compose.yml（运维手工维护，CD 不覆盖）
+#
+# 方案 A（对齐 cogniforge-web）：
+#   Traefik → ai-job-hunter-fe:80（Nginx）
+#                ├─ /health
+#                ├─ /api/* → ai-job-hunter-be:8080
+#                └─ /*     → SPA
+#
+# 网络：
+#   proxy  → Traefik 入口；前端↔后端也走此网（避免额外建 internal）
+#   db-net → 后端访问公用 PostgreSQL / Redis
 # =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
-  # 前端服务（ai-job-hunter-fe）
+  # 前端（Nginx 静态 + /api 反代）
   # ---------------------------------------------------------------------------
   ai-job-hunter-fe:
     image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-fe:${IMAGE_TAG:-latest}
@@ -16,25 +23,37 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      NUXT_PUBLIC_API_BASE: http://ai-job-hunter-be:8080/api/v1
     expose:
-      - "3000"
+      - "80"
     networks:
       - proxy
+    # Traefik v3 会过滤 unhealthy/starting；这是前端 Nginx /health，不是 Actuator
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.ai-job-hunter-fe.rule=PathPrefix(`/`)"
+      - "traefik.docker.network=proxy"
+      - "traefik.http.routers.ai-job-hunter-fe.rule=Host(`${DOMAIN:?Set DOMAIN in .env}`)"
       - "traefik.http.routers.ai-job-hunter-fe.entrypoints=websecure"
       - "traefik.http.routers.ai-job-hunter-fe.tls=true"
       - "traefik.http.routers.ai-job-hunter-fe.tls.certresolver=letsencrypt"
-      - "traefik.http.services.ai-job-hunter-fe.loadbalancer.server.port=3000"
-      # Portainer 权限控制：不配置会导致手动 docker compose 重建后 Restricted 权限丢失
-      # （但在 Portainer 页面重启无影响）
+      - "traefik.http.routers.ai-job-hunter-fe.service=ai-job-hunter-fe"
+      - "traefik.http.services.ai-job-hunter-fe.loadbalancer.server.port=80"
+      # HTTP → HTTPS
+      - "traefik.http.routers.ai-job-hunter-fe-http.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.ai-job-hunter-fe-http.entrypoints=web"
+      - "traefik.http.routers.ai-job-hunter-fe-http.middlewares=ai-job-hunter-fe-https-redirect"
+      - "traefik.http.middlewares.ai-job-hunter-fe-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.ai-job-hunter-fe-https-redirect.redirectscheme.permanent=true"
+      # Portainer Restricted（按需取消注释）
       # - "io.portainer.accesscontrol.users=xxuser"
 
   # ---------------------------------------------------------------------------
-  # 后端服务（ai-job-hunter-be）
+  # 后端（Spring Boot；不暴露公网，由前端 Nginx 反代）
   # ---------------------------------------------------------------------------
   ai-job-hunter-be:
     image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-be:${IMAGE_TAG:-latest}
@@ -44,36 +63,39 @@ services:
       - .env
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      # 与 application.yml / .env.example 对齐：统一用 PGSQL_*
       PGSQL_HOST:     ${PGSQL_HOST}
       PGSQL_PORT:     ${PGSQL_PORT:-5432}
       PGSQL_DB:       ${PGSQL_DB}
       PGSQL_USERNAME: ${PGSQL_USERNAME}
       PGSQL_PASSWORD: ${PGSQL_PASSWORD}
       PGSQL_SSLMODE:  ${PGSQL_SSLMODE:-disable}
-      # Redis
       REDIS_HOST:     ${REDIS_HOST}
       REDIS_PORT:     ${REDIS_PORT:-6379}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       REDIS_DB:       ${REDIS_DB:-0}
     expose:
       - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     networks:
       - proxy
       - db-net
     labels:
       - "traefik.enable=false"
-      # Portainer 权限控制：不配置会导致手动 docker compose 重建后 Restricted 权限丢失
-      # （但在 Portainer 页面重启无影响）
       # - "io.portainer.accesscontrol.users=xxuser"
 
   # ---------------------------------------------------------------------------
-  # Agent 服务（ai-job-hunter-agent）
+  # Agent（可选；不暴露公网）
   # ---------------------------------------------------------------------------
   ai-job-hunter-agent:
     image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-agent:${IMAGE_TAG:-latest}
     container_name: ai-job-hunter-agent
     restart: unless-stopped
+    profiles: ["agent"]
     env_file:
       - .env
     expose:
@@ -83,13 +105,8 @@ services:
       - db-net
     labels:
       - "traefik.enable=false"
-      # Portainer 权限控制：不配置会导致手动 docker compose 重建后 Restricted 权限丢失
-      # （但在 Portainer 页面重启无影响）
       # - "io.portainer.accesscontrol.users=xxuser"
 
-# =============================================================================
-# 网络
-# =============================================================================
 networks:
   proxy:
     external: true

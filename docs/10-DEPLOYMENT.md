@@ -8,9 +8,36 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
+| 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
 | 2026-09-28 | v1.2 | fix：三处 `sed -i` 改 `tee` 原子写入；加 §0 边界声明；详见 §5「工作流踩坑」 | orjrs |
 | 2026-09-24 | v1.1 | 通知改用 GitHub Issue（去 SMTP 配置），自动去重告警 | orjrs |
 | 2026-09-24 | v1.0 | 初始版本（自动回滚 + 邮件通知 + 手动触发） | orjrs |
+
+---
+
+## [变更] 方案 A 前端端口与 Host 路由（2026-10-11）
+
+**变更原因**：FE 镜像已改为 Nginx:80，服务器旧 compose 仍把 Traefik 指到 **3000** → 公网 **502 Bad Gateway**。
+
+**包含代码**：`docker-compose.yml`（be/fe 对齐）、`ai-job-hunter-fe/nginx.conf`
+
+**变更前 → 变更后**：
+
+| 项 | 变更前 | 变更后 |
+|---|---|---|
+| Traefik upstream 端口 | 3000 | **80** |
+| 路由规则 | `PathPrefix(\`/\`)` | `Host(\`${DOMAIN}\`)` |
+| FE 健康检查 | 无 / 错端口 | `wget ...:80/health` |
+
+**服务器必须人工改** `/opt/project/ai-job-hunter/docker-compose.yml`（CD 不覆盖），改完后：
+
+```bash
+cd /opt/project/ai-job-hunter
+docker compose up -d --force-recreate ai-job-hunter-fe
+docker compose ps
+docker logs ai-job-hunter-fe --tail 50
+```
 
 ---
 
@@ -189,10 +216,38 @@ IMAGE_TAG=<旧tag> docker compose up -d ai-job-hunter-be
 
 ## 5. 常见问题
 
-### Q1：部署卡在「Health check」
+### Q0：域名打开是 502 Bad Gateway
+
+**最常见根因**：Traefik 仍转发到容器 **3000**，但新前端镜像 Nginx 只听 **80**。
+
+```bash
+# 看 Traefik 实际连的端口（应看到 80）
+docker inspect ai-job-hunter-fe --format '{{json .Config.Labels}}' | tr ',' '\n' | grep loadbalancer
+
+# 容器内自检
+docker exec ai-job-hunter-fe wget -qO- http://127.0.0.1:80/health
+
+# 后端是否在同一 Docker 网、能否被 Nginx 反代
+docker exec ai-job-hunter-fe wget -qO- http://ai-job-hunter-be:8080/actuator/health || true
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep ai-job-hunter
+```
+
+修复：把 compose 里 `loadbalancer.server.port` 改成 **80**，`expose` 改成 **80**，路由改成 `Host(\`${DOMAIN}\`)`，然后 `docker compose up -d --force-recreate ai-job-hunter-fe`。
+
+若首页已通、只有 `/api` 502：查后端是否 healthy、是否与前端同在 `proxy` 网。
+
+### Q1：部署卡在「Health check」/ 后端 `unhealthy` 但日志已 Started
 - 查看 GHCR 是否有新镜像：`docker images | grep ai-job-hunter-be`
 - SSH 进去看日志：`docker logs ai-job-hunter-be --tail 100`
-- 看容器状态：`docker inspect ai-job-hunter-be | grep -A 5 State`
+- 看健康详情：`docker inspect ai-job-hunter-be --format '{{json .State.Health}}'`
+
+**若 Log 里是 `HTTP/1.1 403`**：Spring Security 未放行 `/actuator/health`（v1.4 已修）。确认镜像含该修复后 recreate。
+
+**临时验证（容器内）**：
+```bash
+docker exec ai-job-hunter-be wget -qO- http://127.0.0.1:8080/actuator/health
+# 期望含 "status":"UP"
+```
 
 ### Q2：部署失败告警
 - 失败时 GitHub 会自动创建 `cd-alert` 标签的 Issue

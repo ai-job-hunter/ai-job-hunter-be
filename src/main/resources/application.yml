@@ -4,7 +4,11 @@ server:
 spring:
   application:
     name: ai-job-hunter
-  
+
+  # JWT 应用不需要默认 inMemory user（否则日志出现 Using generated security password）
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
   datasource:
     url: jdbc:postgresql://${PGSQL_HOST:localhost}:${PGSQL_PORT:5432}/${PGSQL_DB:job_hunter}?sslmode=${PGSQL_SSLMODE:disable}
     username: ${PGSQL_USERNAME:postgres}
@@ -61,7 +65,7 @@ jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-here-must-be-at-least-32-chars}
   expiration: 86400000
 
-# Actuator
+# Actuator（/actuator/health 供 Docker HEALTHCHECK；Security 已 permitAll）
 management:
   endpoints:
     web:

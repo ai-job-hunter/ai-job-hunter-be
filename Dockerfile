@@ -26,9 +26,10 @@ COPY --from=builder /app/build/libs/*.jar app.jar
 # 暴露端口
 EXPOSE 8080
 
-# 健康检查
+# 健康检查（Alpine BusyBox wget；用 127.0.0.1 避免 localhost→::1）
+# /actuator/health 必须在 SecurityConfig 里 permitAll，否则 403 → unhealthy
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+    CMD wget -qO- http://127.0.0.1:8080/actuator/health || exit 1
 
 # 启动
 ENTRYPOINT ["java", "-jar", "app.jar"]
