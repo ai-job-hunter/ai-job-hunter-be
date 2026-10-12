@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-12 | v1.6 | fix CD：自动部署用新建时间戳 tag（勿拉旧 :latest），避免 actuator 修复永远上不了线 | orjrs |
 | 2026-10-12 | v1.5 | 删除后端 CORS（方案 A 同源 + 本地 Nuxt 代理），避免 Origin 白名单 403 | orjrs |
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
@@ -250,13 +251,18 @@ docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep ai-job-hun
 - SSH 进去看日志：`docker logs ai-job-hunter-be --tail 100`
 - 看健康详情：`docker inspect ai-job-hunter-be --format '{{json .State.Health}}'`
 
-**若 Log 里是 `HTTP/1.1 403`**：Spring Security 未放行 `/actuator/health`（v1.4 已修）。确认镜像含该修复后 recreate。
+**若 Log 里是 `HTTP/1.1 403`**：旧镜像未放行 `/actuator/health`。v1.4 已修代码，但若 CD 一直部署 `:latest` 而 `:latest` 从未在健康后更新，会**永远拉旧镜像**（v1.6 已改：自动模式部署新建时间戳 tag，通过后再推 `:latest`）。
 
-**临时验证（容器内）**：
+**临时止血（已有时间戳镜像时）**：
 ```bash
+# 例：CD 日志里的 Image tag，如 20261012140810
+cd /opt/project/ai-job-hunter
+IMAGE_TAG=20261012140810 docker compose pull ai-job-hunter-be
+IMAGE_TAG=20261012140810 docker compose up -d --force-recreate ai-job-hunter-be
 docker exec ai-job-hunter-be wget -qO- http://127.0.0.1:8080/actuator/health
-# 期望含 "status":"UP"
 ```
+
+或 GitHub Actions → CD → Run workflow → `image_tag` 填该时间戳。
 
 ### Q2：部署失败告警
 - 失败时 GitHub 会自动创建 `cd-alert` 标签的 Issue

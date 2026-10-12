@@ -196,13 +196,19 @@ jobs:
             echo "Current deployed tag: $CURRENT_TAG"
 
             # ── 2. 决定要部署的 tag ─────────────────────────────────
-            if [ -n "${{ env.MANUAL_TAG }}" ]; then
-              DEPLOY_TAG="${{ env.MANUAL_TAG }}"
+            # 构建步骤只推「时间戳」tag，:latest 仅在健康检查通过后才打。
+            # 自动模式必须部署 NEW_IMAGE_TAG；若误用 :latest，会一直拉到旧的
+            # 不健康镜像（例如 actuator 403），修好的镜像永远上不了线。
+            if [ -n "$MANUAL_TAG" ]; then
+              DEPLOY_TAG="$MANUAL_TAG"
               DEPLOY_MODE="manual"
             else
-              # 自动模式：CI 成功后已更新 GHCR :latest，直接用 latest
-              DEPLOY_TAG="latest"
+              DEPLOY_TAG="$NEW_IMAGE_TAG"
               DEPLOY_MODE="auto"
+            fi
+            if [ -z "$DEPLOY_TAG" ]; then
+              echo "ERROR: empty DEPLOY_TAG (NEW_IMAGE_TAG/MANUAL_TAG missing)"
+              exit 1
             fi
             echo "Deploying tag: $DEPLOY_TAG (mode: $DEPLOY_MODE)"
 
@@ -256,25 +262,24 @@ jobs:
               fi
             done
 
-            # ── 7. 健康检查失败 → 自动回滚 ──────────────────────────
-            if [ "$HEALTHY" != "true" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
-              echo "=== ⚠️  HEALTH CHECK FAILED, ROLLING BACK TO :latest ==="
-              # 回滚固定用 :latest（GHCR 上永远指向最后一次成功部署的版本）
-              ROLLBACK_RESULT=$(IMAGE_TAG=latest docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
-              echo "$ROLLBACK_RESULT"
-
-              # 等 30 秒看回滚后是否 healthy
-              sleep 30
-              ROLLBACK_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
-              echo "=== Rollback container status: $ROLLBACK_STATUS ==="
-
-              # 写回升级日志
-              echo "| $TS | \`latest\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md
-
+            # ── 7. 健康检查失败 → 回滚到部署前的 :latest（若与本次 tag 不同）──
+            if [ "$HEALTHY" != "true" ]; then
+              echo "=== ⚠️  HEALTH CHECK FAILED for $DEPLOY_TAG ==="
+              if [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
+                echo "=== Rolling back to previous image tag: $CURRENT_TAG ==="
+                ROLLBACK_RESULT=$(IMAGE_TAG=$CURRENT_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
+                echo "$ROLLBACK_RESULT"
+                sleep 30
+                ROLLBACK_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
+                echo "=== Rollback container status: $ROLLBACK_STATUS ==="
+                echo "| $TS | \`$CURRENT_TAG\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md
+              else
+                echo "=== No distinct previous tag to roll back to ==="
+              fi
               exit 1
             fi
 
-            # ── 8. 部署成功：把正确的 tag 打回 :latest ───────────────
+            # ── 8. 部署成功：把本次时间戳 tag 提升为 :latest ─────────
             echo "=== Tagging $DEPLOY_TAG as :latest on GHCR ==="
             FULL_IMAGE="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:$DEPLOY_TAG"
             docker tag "$FULL_IMAGE" "ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:latest"
