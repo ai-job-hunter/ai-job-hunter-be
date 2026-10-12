@@ -8,10 +8,21 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-13 | v1.4 | 登录/注册改黛青水墨风 + lonely √3 品牌标 | orjrs |
 | 2026-10-12 | v1.3 | 登录页支持用户名或邮箱（`account`） | orjrs |
 | 2026-10-12 | v1.2 | ~~登录仅 email~~；解析 ApiResponse.data.token；注册后自动登录 | orjrs |
 | 2026-10-11 | v1.1 | 对齐 cogniforge-web 方案 A：Nginx 同源反代 `/api`，构建时 `API_BASE=` | orjrs |
 | 2026-09-02 | v1.0 | 初始版本（Vue 3 + Nuxt 3 + shadcn-vue） | - |
+
+---
+
+## [变更] 登录/注册视觉（黛青水墨 + √3）（2026-10-13）
+
+**变更原因**：旧登录页蓝紫渐变 + 白卡片，观感差且与个人品牌不一致。
+
+**包含代码**：`layouts/auth.vue`、`pages/login.vue`、`pages/register.vue`、`assets/css/main.css`、`public/logo.svg` 等、`nuxt.config.ts`
+
+**变更前 → 变更后**：`from-blue-50 to-indigo-100` 白卡片 → 全屏黛青水墨底 + lonely √3 标 + 半透明表单；字体 Source Serif 4 / DM Sans / Noto SC。
 
 ---
 
