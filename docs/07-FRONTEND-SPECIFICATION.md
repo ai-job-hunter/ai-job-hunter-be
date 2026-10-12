@@ -8,8 +8,36 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-12 | v1.3 | 登录页支持用户名或邮箱（`account`） | orjrs |
+| 2026-10-12 | v1.2 | ~~登录仅 email~~；解析 ApiResponse.data.token；注册后自动登录 | orjrs |
 | 2026-10-11 | v1.1 | 对齐 cogniforge-web 方案 A：Nginx 同源反代 `/api`，构建时 `API_BASE=` | orjrs |
 | 2026-09-02 | v1.0 | 初始版本（Vue 3 + Nuxt 3 + shadcn-vue） | - |
+
+---
+
+## [变更] 登录支持用户名或邮箱（2026-10-12）
+
+**变更原因**：用户要求登录可用用户名或邮箱。
+
+**包含代码**：`login.vue`、`useAuth.ts`；后端见 `docs/05-API-SPECIFICATION.md` §3.2
+
+**变更前 → 变更后**：仅邮箱 → 输入框「用户名或邮箱」，请求体 `{ account, email: account, password }`。
+
+---
+
+## [变更] 登录字段与响应解析（2026-10-12）
+
+**变更原因**：注册成功后登录报「邮箱或密码错误」。前端登录传 `username`，后端只认 `email`；且 token 在 `data.token`。
+
+**包含代码**：`ai-job-hunter-fe/pages/login.vue`、`register.vue`、`composables/useAuth.ts`、`types/index.ts`
+
+**变更前 → 变更后**：
+
+| 项 | 变更前 | 变更后 |
+|---|---|---|
+| 登录请求体 | `{ username, password }` | ~~`{ email }`~~ → v1.3 `{ account }`（用户名或邮箱） |
+| Token 读取 | `res.token` | `res.data.token` |
+| 注册后流程 | 跳转 `/login` 再手输 | 自动 login 后进首页 |
 
 ---
 

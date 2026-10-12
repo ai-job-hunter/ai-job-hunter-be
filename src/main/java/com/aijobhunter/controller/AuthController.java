@@ -55,11 +55,20 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@RequestBody LoginRequest request) {
-        User user = userRepository.findByEmail(request.getEmail()).orElse(null);
+        String account = request.resolveAccount();
+        if (account == null || request.getPassword() == null || request.getPassword().isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error(2001, "用户名/邮箱或密码错误"));
+        }
+
+        // 支持邮箱或用户名登录
+        User user = userRepository.findByEmail(account)
+                .or(() -> userRepository.findByUsername(account))
+                .orElse(null);
 
         if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             return ResponseEntity.badRequest()
-                    .body(ApiResponse.error(2001, "邮箱或密码错误"));
+                    .body(ApiResponse.error(2001, "用户名/邮箱或密码错误"));
         }
 
         String token = tokenProvider.generateToken(user.getId());

@@ -8,7 +8,18 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-12 | v1.1 | 登录支持用户名或邮箱（`account` / 兼容 `email`·`username`） | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
+
+---
+
+## [变更] 登录支持用户名或邮箱（2026-10-12）
+
+**变更原因**：用户希望注册后既可用用户名也可用邮箱登录。
+
+**包含代码**：`LoginRequest.java`、`AuthController.java`
+
+**变更前 → 变更后**：只认 `email` → 先按邮箱查，没有再按用户名查；推荐字段 `account`，仍兼容旧字段 `email` / `username`。
 
 ---
 
@@ -130,11 +141,18 @@ POST /api/v1/auth/register
 POST /api/v1/auth/login
 ```
 
-**请求体：**
+**请求体：**（`account` 填用户名或邮箱均可；也兼容旧字段 `email` / `username`）
 
 ```json
 {
-  "email": "zhangsan@example.com",
+  "account": "zhangsan@example.com",
+  "password": "securePassword123"
+}
+```
+
+```json
+{
+  "account": "zhangsan",
   "password": "securePassword123"
 }
 ```

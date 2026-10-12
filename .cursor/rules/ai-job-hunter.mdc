@@ -72,7 +72,7 @@
 | 位置 | 谁维护 |
 |---|---|
 | `~/.cursor/skills/deploy/SKILL.md` | 全局 skill，已被本仓库 CD workflow 沿用「tee 原子写入」惯例 |
-| `~/.cursor/skills/github-cicd-template/SKILL.md` | 全局 skill，§L156-168 的「tee 写入 docker-tag.env」是本仓库 §1.2 「IMAGE_TAG 改写」的范本 |
+| `~/.cursor/skills/github-cicd-template/SKILL.md` | 全局 skill：构建双 tag（sha/时间戳+latest），服务器始终 `:latest`；~~docker-tag.env~~ 已废弃 |
 | 仓库级规则（本文件） | ai-job-hunter 独有约束 |
 
 ---
