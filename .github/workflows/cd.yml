@@ -40,7 +40,7 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "要部署的镜像 tag（留空部署最新；指定则填纯时间戳，如 20260924153000）"
+        description: "要部署的镜像 tag（留空=latest；回滚则填纯时间戳，如 20260924153000）"
         required: false
         default: ""
         type: string
@@ -101,8 +101,10 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          # 与 cogniforge 一致：同时打时间戳 + latest；服务器始终拉 latest
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:${{ steps.vars.outputs.image_tag }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_PROJECT }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -190,31 +192,27 @@ jobs:
             echo "=== Login to GHCR ==="
             echo "${{ github.token }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # ── 1. 记录当前版本（仅用于日志，不用于回滚）──────────────
-            # 从运行的容器反查当前使用的 tag
-            CURRENT_TAG=$(docker inspect ${{ env.COMPOSE_SERVICES }} --format='{{ index .Config.Image }}' 2>/dev/null | awk -F: '{print $NF}' || echo "unknown")
-            echo "Current deployed tag: $CURRENT_TAG"
+            # ── 1. 记录当前镜像 ID（回滚用；服务器始终跑 :latest）──────
+            CONTAINER_NAME=${{ env.COMPOSE_SERVICES }}
+            PREV_IMAGE_ID=$(docker inspect "$CONTAINER_NAME" --format='{{.Image}}' 2>/dev/null || echo "")
+            echo "Previous image id: ${PREV_IMAGE_ID:-none}"
 
-            # ── 2. 决定要部署的 tag ─────────────────────────────────
-            # 构建步骤只推「时间戳」tag，:latest 仅在健康检查通过后才打。
-            # 自动模式必须部署 NEW_IMAGE_TAG；若误用 :latest，会一直拉到旧的
-            # 不健康镜像（例如 actuator 403），修好的镜像永远上不了线。
+            # ── 2. 决定要部署的 tag（与 cogniforge 一致：默认 latest）──
+            # 构建已同时推送「时间戳 + latest」；自动模式服务器只拉 latest。
+            # 手动填 image_tag 时可回滚到历史时间戳。
             if [ -n "$MANUAL_TAG" ]; then
               DEPLOY_TAG="$MANUAL_TAG"
               DEPLOY_MODE="manual"
             else
-              DEPLOY_TAG="$NEW_IMAGE_TAG"
+              DEPLOY_TAG="latest"
               DEPLOY_MODE="auto"
             fi
-            if [ -z "$DEPLOY_TAG" ]; then
-              echo "ERROR: empty DEPLOY_TAG (NEW_IMAGE_TAG/MANUAL_TAG missing)"
-              exit 1
-            fi
-            echo "Deploying tag: $DEPLOY_TAG (mode: $DEPLOY_MODE)"
+            echo "Deploying tag: $DEPLOY_TAG (mode: $DEPLOY_MODE, build_tag=${NEW_IMAGE_TAG:-n/a})"
 
             # ── 3. 更新升级日志 ─────────────────────────────────────
             TS=$(date -u +'%H:%M')
             TODAY=$(date -u +'%Y-%m-%d')
+            LOG_TAG="${NEW_IMAGE_TAG:-$DEPLOY_TAG}"
             if ! grep -qE "^## $TODAY" UPGRADE_LOG.md 2>/dev/null; then
               echo "" >> UPGRADE_LOG.md
               echo "## $TODAY" >> UPGRADE_LOG.md
@@ -222,32 +220,24 @@ jobs:
               echo "| 时间 (UTC) | 镜像 tag | 当前 | 备注 |" >> UPGRADE_LOG.md
               echo "|---|---|---|---|" >> UPGRADE_LOG.md
             fi
-            if [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
-              # 把旧 tag 标为「历史」—— 用 awk 流式处理后通过 tee 写回
-              # （不要用 sed -i，临时文件落到当前目录，部署用户常无写权限）
-              if grep -qF "\`$CURRENT_TAG\`" UPGRADE_LOG.md 2>/dev/null; then
-                awk -v tag="$CURRENT_TAG" '
-                  index($0, "`" tag "`") > 0 { sub(/\| latest \|/, "| 历史 |") }
-                  { print }
-                ' UPGRADE_LOG.md | tee UPGRADE_LOG.md > /dev/null
-              fi
+            if grep -qE '\| latest \|' UPGRADE_LOG.md 2>/dev/null; then
+              awk '{ if ($0 ~ /\| latest \|/) sub(/\| latest \|/, "| 历史 |"); print }' \
+                UPGRADE_LOG.md | tee UPGRADE_LOG.md > /dev/null
             fi
-            echo "| $TS | \`$DEPLOY_TAG\` | latest | ${{ env.REASON }} |" >> UPGRADE_LOG.md
+            echo "| $TS | \`$LOG_TAG\` | latest | ${{ env.REASON }} |" >> UPGRADE_LOG.md
 
-            # ── 4. 拉取并启动新版本 ─────────────────────────────────
+            # ── 4. 拉取并启动（compose 默认 IMAGE_TAG=latest）────────
             echo "=== Pull image: $DEPLOY_TAG ==="
             IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} pull ${{ env.COMPOSE_SERVICES }}
 
             echo "=== Restart container ==="
             IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }}
 
-            # ── 6. 健康检查（最多 90 秒）────────────────────────────
+            # ── 5. 健康检查（最多 90 秒）────────────────────────────
             echo "=== Health check ==="
-            CONTAINER_NAME=${{ env.COMPOSE_SERVICES }}
             HEALTHY=false
             for i in $(seq 1 18); do
               sleep 5
-              # 容器的 health status（Dockerfile 里配了 HEALTHCHECK）
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
               RUNNING=$(docker inspect --format='{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo "false")
               echo "  attempt $i: status=$STATUS running=$RUNNING"
@@ -255,37 +245,31 @@ jobs:
                 HEALTHY=true
                 break
               fi
-              # 启动失败（容器停止）就提前结束
               if [ "$RUNNING" = "false" ]; then
                 echo "  container stopped, exit early"
                 break
               fi
             done
 
-            # ── 7. 健康检查失败 → 回滚到部署前的 :latest（若与本次 tag 不同）──
+            # ── 6. 失败则用部署前本地镜像 ID 回滚 ───────────────────
             if [ "$HEALTHY" != "true" ]; then
               echo "=== ⚠️  HEALTH CHECK FAILED for $DEPLOY_TAG ==="
-              if [ -n "$CURRENT_TAG" ] && [ "$CURRENT_TAG" != "$DEPLOY_TAG" ]; then
-                echo "=== Rolling back to previous image tag: $CURRENT_TAG ==="
-                ROLLBACK_RESULT=$(IMAGE_TAG=$CURRENT_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} 2>&1) || true
-                echo "$ROLLBACK_RESULT"
+              if [ -n "$PREV_IMAGE_ID" ]; then
+                ROLLBACK_REF="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:rollback-local"
+                echo "=== Rolling back to previous image $PREV_IMAGE_ID ==="
+                docker tag "$PREV_IMAGE_ID" "$ROLLBACK_REF" || true
+                IMAGE_TAG=rollback-local docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }} || true
                 sleep 30
                 ROLLBACK_STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
                 echo "=== Rollback container status: $ROLLBACK_STATUS ==="
-                echo "| $TS | \`$CURRENT_TAG\` | latest | ⚠️ 自动回滚（$DEPLOY_TAG 启动失败） |" >> UPGRADE_LOG.md
+                echo "| $TS | \`rollback-local\` | latest | ⚠️ 自动回滚（$LOG_TAG 启动失败） |" >> UPGRADE_LOG.md
               else
-                echo "=== No distinct previous tag to roll back to ==="
+                echo "=== No previous image id to roll back to ==="
               fi
               exit 1
             fi
 
-            # ── 8. 部署成功：把本次时间戳 tag 提升为 :latest ─────────
-            echo "=== Tagging $DEPLOY_TAG as :latest on GHCR ==="
-            FULL_IMAGE="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:$DEPLOY_TAG"
-            docker tag "$FULL_IMAGE" "ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:latest"
-            docker push "ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:latest"
-
-            echo "=== ✅ Deploy successful ==="
+            echo "=== ✅ Deploy successful (server running :$DEPLOY_TAG) ==="
             docker compose ps
 
       - name: Notify failure (create GitHub Issue)

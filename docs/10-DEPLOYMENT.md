@@ -8,13 +8,32 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
-| 2026-10-12 | v1.6 | fix CD：自动部署用新建时间戳 tag（勿拉旧 :latest），避免 actuator 修复永远上不了线 | orjrs |
+| 2026-10-12 | v1.7 | CD 对齐 cogniforge：构建同时推时间戳+latest，服务器始终 pull/up :latest | orjrs |
+| 2026-10-12 | v1.6 | ~~自动部署用时间戳 tag~~（v1.7 改为双 tag + 服务器 latest，与 cogniforge 一致） | orjrs |
 | 2026-10-12 | v1.5 | 删除后端 CORS（方案 A 同源 + 本地 Nuxt 代理），避免 Origin 白名单 403 | orjrs |
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
 | 2026-09-28 | v1.2 | fix：三处 `sed -i` 改 `tee` 原子写入；加 §0 边界声明；详见 §5「工作流踩坑」 | orjrs |
 | 2026-09-24 | v1.1 | 通知改用 GitHub Issue（去 SMTP 配置），自动去重告警 | orjrs |
 | 2026-09-24 | v1.0 | 初始版本（自动回滚 + 邮件通知 + 手动触发） | orjrs |
+
+---
+
+## [变更] CD 双 tag + 服务器始终 latest（2026-10-12）
+
+**变更原因**：与 cogniforge 对齐；避免「只推时间戳、部署却拉旧 latest」或「只部署时间戳、latest 滞后」的鸡生蛋问题。
+
+**包含代码**：`.github/workflows/cd.yml`
+
+**变更前 → 变更后**：
+
+| 项 | 变更前 | 变更后 |
+|---|---|---|
+| 构建推送 | 仅时间戳（或事后再打 latest） | **同时**推 `yyyyMMddHHmmss` + `latest` |
+| 自动部署 | 部署新建时间戳 tag | **始终** `pull/up :latest` |
+| 失败回滚 | 用旧 tag 名 | 用部署前本地镜像 ID → `rollback-local` |
+
+**影响范围**：CD 自动/手动部署；服务器 compose 默认 `${IMAGE_TAG:-latest}` 即可。
 
 ---
 
@@ -153,7 +172,7 @@ git push → CI 通过 → CD 自动构建镜像 → 推送 GHCR → SSH 到服�
 | 读取当前 tag | 从服务器的 `UPGRADE_LOG.md` 第一条 `| latest |` 行提取镜像 tag（**不读 .env**，废弃 IMAGE_TAG 约定） |
 | 部署新 tag | `docker compose pull + up -d` |
 | 健康检查 | 最多 90 秒（18 × 5s），用 Docker 原生 `HEALTHCHECK` 状态 |
-| 失败回滚 | 健康检查不通过 → 用上一个 tag 重启容器 → 升级日志记录（**.env 的 IMAGE_TAG 不再维护**） |
+| 失败回滚 | 健康检查不通过 → 用部署前本地镜像 ID（`rollback-local`）重启 → 升级日志记录 |
 | 失败告警 | 自动创建 `cd-alert` Issue（含回滚信息），已存在则追加评论 |
 
 **回滚触发条件**：
@@ -186,7 +205,7 @@ CD 失败时 GitHub Actions 会自动在仓库创建告警 Issue（标签 `cd-al
 ### 方式 A：GitHub 网页（推荐）
 1. 打开 `https://github.com/<owner>/ai-job-hunter-be/actions/workflows/cd.yml`
 2. 点 `Run workflow`
-3. `image_tag` 填写要回滚到的 tag（**纯时间戳格式**，如 `20260924153000`），留空则部署最新构建
+3. `image_tag` 填写要回滚到的 tag（**纯时间戳格式**，如 `20260924153000`），留空则部署 **`:latest`**
 4. `reason` 填写回滚原因
 
 ### 方式 B：SSH 到服务器手动操作
@@ -203,16 +222,16 @@ IMAGE_TAG=<旧tag> docker compose up -d ai-job-hunter-be
 
 ---
 
-## 6. 镜像 tag 命名规范
+## 6. 镜像 tag 命名规范（对齐 cogniforge）
 
 | 项 | 值 |
 |---|---|
 | 仓库 | `ghcr.io/<owner>/ai-job-hunter-be` |
-| tag 格式 | `yyyyMMddHHmmss`（纯时间戳，UTC） |
-| 示例 | `ghcr.io/liujun/ai-job-hunter-be:20260924153000` |
-| 不带前缀 | tag 不带 `ai-job-hunter-be-` 前缀，因为仓库名已经区分项目 |
+| 每次构建推送 | **两个 tag**：`yyyyMMddHHmmss`（历史）+ `latest`（当前） |
+| 服务器 | compose 始终 `IMAGE_TAG=latest`（或默认 latest） |
+| 手动回滚 | CD `workflow_dispatch` 填历史时间戳，或 SSH `IMAGE_TAG=<时间戳> compose up` |
 
-历史 tag 通过 `UPGRADE_LOG.md` 追溯，不依赖任何外部系统。
+历史 tag 通过 GHCR + `UPGRADE_LOG.md` 追溯。
 
 ---
 
@@ -251,18 +270,18 @@ docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep ai-job-hun
 - SSH 进去看日志：`docker logs ai-job-hunter-be --tail 100`
 - 看健康详情：`docker inspect ai-job-hunter-be --format '{{json .State.Health}}'`
 
-**若 Log 里是 `HTTP/1.1 403`**：旧镜像未放行 `/actuator/health`。v1.4 已修代码，但若 CD 一直部署 `:latest` 而 `:latest` 从未在健康后更新，会**永远拉旧镜像**（v1.6 已改：自动模式部署新建时间戳 tag，通过后再推 `:latest`）。
+**若 Log 里是 `HTTP/1.1 403`**：旧镜像未放行 `/actuator/health`（v1.4 已修）。v1.7 起构建即推 `:latest`，服务器拉 latest 即可吃到修复。
 
-**临时止血（已有时间戳镜像时）**：
+**临时止血**：
 ```bash
-# 例：CD 日志里的 Image tag，如 20261012140810
 cd /opt/project/ai-job-hunter
+# 自动：拉最新 latest
+docker compose pull ai-job-hunter-be && docker compose up -d --force-recreate ai-job-hunter-be
+# 或指定历史时间戳回滚
 IMAGE_TAG=20261012140810 docker compose pull ai-job-hunter-be
 IMAGE_TAG=20261012140810 docker compose up -d --force-recreate ai-job-hunter-be
 docker exec ai-job-hunter-be wget -qO- http://127.0.0.1:8080/actuator/health
 ```
-
-或 GitHub Actions → CD → Run workflow → `image_tag` 填该时间戳。
 
 ### Q2：部署失败告警
 - 失败时 GitHub 会自动创建 `cd-alert` 标签的 Issue
