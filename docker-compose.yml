@@ -43,6 +43,10 @@ services:
       - "traefik.http.routers.ai-job-hunter-fe.tls.certresolver=letsencrypt"
       - "traefik.http.routers.ai-job-hunter-fe.service=ai-job-hunter-fe"
       - "traefik.http.services.ai-job-hunter-fe.loadbalancer.server.port=80"
+      # HSTS：强制浏览器只用 HTTPS（http 打开登录页会显示「不安全」但证书仍可能显示有效）
+      - "traefik.http.routers.ai-job-hunter-fe.middlewares=ai-job-hunter-fe-headers"
+      - "traefik.http.middlewares.ai-job-hunter-fe-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.ai-job-hunter-fe-headers.headers.forceSTSHeader=true"
       # HTTP → HTTPS
       - "traefik.http.routers.ai-job-hunter-fe-http.rule=Host(`${DOMAIN}`)"
       - "traefik.http.routers.ai-job-hunter-fe-http.entrypoints=web"
