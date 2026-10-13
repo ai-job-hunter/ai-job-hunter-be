@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-13 | v1.8 | 后端限内存：Dockerfile JAVA_OPTS + compose mem_limit，防小机登录卡死 | orjrs |
 | 2026-10-12 | v1.7 | CD 对齐 cogniforge：构建同时推时间戳+latest，服务器始终 pull/up :latest | orjrs |
 | 2026-10-12 | v1.6 | ~~自动部署用时间戳 tag~~（v1.7 改为双 tag + 服务器 latest，与 cogniforge 一致） | orjrs |
 | 2026-10-12 | v1.5 | 删除后端 CORS（方案 A 同源 + 本地 Nuxt 代理），避免 Origin 白名单 403 | orjrs |
@@ -16,6 +17,36 @@
 | 2026-09-28 | v1.2 | fix：三处 `sed -i` 改 `tee` 原子写入；加 §0 边界声明；详见 §5「工作流踩坑」 | orjrs |
 | 2026-09-24 | v1.1 | 通知改用 GitHub Issue（去 SMTP 配置），自动去重告警 | orjrs |
 | 2026-09-24 | v1.0 | 初始版本（自动回滚 + 邮件通知 + 手动触发） | orjrs |
+
+---
+
+## [变更] 后端内存上限（2026-10-13）
+
+**变更原因**：远端小机登录即卡死，多半是 Spring Boot **未限堆**，与 cogniforge/PG/Redis 抢内存触发 swap。
+
+**包含代码**：`Dockerfile`、`docker-compose.yml`、`.env.example`
+
+**变更前 → 变更后**：裸 `java -jar` → `JAVA_OPTS`（MaxRAMPercentage）+ compose `mem_limit` 默认 **768m**。
+
+**服务器须人工**（CD 不覆盖 compose / `.env`）：
+
+```bash
+# 1) 看谁吃内存
+free -h
+sudo docker stats --no-stream
+
+# 2) 立刻止血（旧镜像也可用 JAVA_TOOL_OPTIONS）
+cd /opt/project/ai-job-hunter
+# 在 .env 增加 BE_MEM_LIMIT / JAVA_TOOL_OPTIONS（见 .env.example）
+# 在 docker-compose.yml 的 ai-job-hunter-be 加上 mem_limit + JAVA_TOOL_OPTIONS（对齐仓库）
+sudo docker compose up -d --force-recreate ai-job-hunter-be
+
+# 或临时：
+sudo docker update --memory=768m --memory-swap=768m ai-job-hunter-be
+# 仍建议 recreate 带上 JAVA_TOOL_OPTIONS，否则堆上限不变
+```
+
+勿开 `profiles: [agent]`（Playwright 更吃内存），除非机器够大。
 
 ---
 

@@ -31,5 +31,9 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget -qO- http://127.0.0.1:8080/actuator/health || exit 1
 
-# 启动
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# 小机器防 OOM：按容器内存上限吃堆（compose mem_limit 建议 512m~768m）
+# 可用环境变量覆盖：JAVA_OPTS / JAVA_TOOL_OPTIONS
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=70.0 -XX:InitialRAMPercentage=15.0 -XX:MaxMetaspaceSize=192m -XX:+ExitOnOutOfMemoryError -XX:+UseG1GC"
+
+# 启动（exec 保证信号正确；勿去掉 sh -c，否则 JAVA_OPTS 不会展开）
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
