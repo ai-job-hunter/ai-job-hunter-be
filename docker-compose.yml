@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     mem_limit: ${FE_MEM_LIMIT:-128m}
     mem_reservation: ${FE_MEM_RESERVATION:-32m}
+    cpus: ${FE_CPUS:-0.25}
     env_file:
       - .env
     expose:
@@ -61,9 +62,10 @@ services:
     image: ghcr.io/${IMAGE_NAMESPACE}/ai-job-hunter-be:${IMAGE_TAG:-latest}
     container_name: ai-job-hunter-be
     restart: unless-stopped
-    # 远端小机：限制容器内存，配合 JAVA_OPTS MaxRAMPercentage，避免把整机打满卡死
+    # 远端小机：限制容器内存/CPU，配合 JAVA_OPTS MaxRAMPercentage，避免把整机打满卡死
     mem_limit: ${BE_MEM_LIMIT:-768m}
     mem_reservation: ${BE_MEM_RESERVATION:-256m}
+    cpus: ${BE_CPUS:-1.0}
     env_file:
       - .env
     environment:
@@ -105,6 +107,7 @@ services:
     # Playwright 吃内存；小机慎开 profile=agent
     mem_limit: ${AGENT_MEM_LIMIT:-1g}
     mem_reservation: ${AGENT_MEM_RESERVATION:-512m}
+    cpus: ${AGENT_CPUS:-1.0}
     env_file:
       - .env
     expose:

@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-14 | v1.11 | 每个 compose 服务补 cpus；同机多项目防 CPU 打满 | orjrs |
 | 2026-10-14 | v1.10 | 每个 compose 服务都写 mem_limit（fe/be/agent）；skill 模板同步 | orjrs |
 | 2026-10-14 | v1.9 | JVM 参数只留 Dockerfile；compose 仅 mem_limit | orjrs |
 | 2026-10-13 | v1.8 | 后端限内存：Dockerfile JAVA_OPTS + compose mem_limit，防小机登录卡死 | orjrs |
@@ -22,25 +23,25 @@
 
 ---
 
-## [变更] 后端内存上限（2026-10-13 / v1.9 精简）
+## [变更] 后端内存 / CPU 上限（2026-10-13 / v1.11）
 
-**变更原因**：远端小机登录卡死；JVM 与 compose 重复配置易混淆。
+**变更原因**：远端小机登录卡死；JVM 与 compose 重复配置易混淆；同机 agent-insight 曾打满 CPU。
 
-**约定（v1.10）**：
+**约定（v1.11）**：
 
 | 项 | 放哪里 |
 |---|---|
 | JVM 堆 / GC（`JAVA_OPTS`） | **只在 Dockerfile** |
-| 容器硬顶（`mem_limit`） | **compose 每个服务都要写**（fe/be/agent；镜像做不了） |
+| 容器硬顶（`mem_limit` + `cpus`） | **compose 每个服务都要写**（fe/be/agent；镜像做不了） |
 
-默认：fe `128m`、be `768m`、agent `1g`（见 `.env.example`）。deploy skill §七·六 与模板已同步。
+默认：fe `128m`/`0.25`、be `768m`/`1.0`、agent `1g`/`1.0`（见 `.env.example`）。deploy skill §七·六 与模板已同步。
 
 **服务器须人工**（CD 不覆盖 compose）：
 
 ```bash
 free -h && sudo docker stats --no-stream
 cd /opt/project/ai-job-hunter
-# 对齐仓库：fe/be（及 agent）都加 mem_limit 后
+# 对齐仓库：fe/be（及 agent）都加 mem_limit + cpus 后
 sudo docker compose up -d --force-recreate
 # 期望 stats 的 LIMIT 列是 128MiB / 768MiB，而不是整机 3.8GiB
 ```
