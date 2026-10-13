@@ -44,11 +44,11 @@ services:
       - "traefik.http.routers.ai-job-hunter-fe.service=ai-job-hunter-fe"
       - "traefik.http.services.ai-job-hunter-fe.loadbalancer.server.port=80"
       # HTTP → HTTPS
-      - "traefik.http.routers.ai-job-hunter-fe-http.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.routers.ai-job-hunter-fe-http.entrypoints=web"
-      - "traefik.http.routers.ai-job-hunter-fe-http.middlewares=ai-job-hunter-fe-https-redirect"
-      - "traefik.http.middlewares.ai-job-hunter-fe-https-redirect.redirectscheme.scheme=https"
-      - "traefik.http.middlewares.ai-job-hunter-fe-https-redirect.redirectscheme.permanent=true"
+      #- "traefik.http.routers.ai-job-hunter-fe-http.rule=Host(`${DOMAIN}`)"
+      #- "traefik.http.routers.ai-job-hunter-fe-http.entrypoints=web"
+      #- "traefik.http.routers.ai-job-hunter-fe-http.middlewares=ai-job-hunter-fe-https-redirect"
+      #- "traefik.http.middlewares.ai-job-hunter-fe-https-redirect.redirectscheme.scheme=https"
+      #- "traefik.http.middlewares.ai-job-hunter-fe-https-redirect.redirectscheme.permanent=true"
       # Portainer Restricted（按需取消注释）
       # - "io.portainer.accesscontrol.users=xxuser"
 
