@@ -8,6 +8,8 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-14 | v1.10 | 每个 compose 服务都写 mem_limit（fe/be/agent）；skill 模板同步 | orjrs |
+| 2026-10-14 | v1.9 | JVM 参数只留 Dockerfile；compose 仅 mem_limit | orjrs |
 | 2026-10-13 | v1.8 | 后端限内存：Dockerfile JAVA_OPTS + compose mem_limit，防小机登录卡死 | orjrs |
 | 2026-10-12 | v1.7 | CD 对齐 cogniforge：构建同时推时间戳+latest，服务器始终 pull/up :latest | orjrs |
 | 2026-10-12 | v1.6 | ~~自动部署用时间戳 tag~~（v1.7 改为双 tag + 服务器 latest，与 cogniforge 一致） | orjrs |
@@ -20,30 +22,27 @@
 
 ---
 
-## [变更] 后端内存上限（2026-10-13）
+## [变更] 后端内存上限（2026-10-13 / v1.9 精简）
 
-**变更原因**：远端小机登录即卡死，多半是 Spring Boot **未限堆**，与 cogniforge/PG/Redis 抢内存触发 swap。
+**变更原因**：远端小机登录卡死；JVM 与 compose 重复配置易混淆。
 
-**包含代码**：`Dockerfile`、`docker-compose.yml`、`.env.example`
+**约定（v1.10）**：
 
-**变更前 → 变更后**：裸 `java -jar` → `JAVA_OPTS`（MaxRAMPercentage）+ compose `mem_limit` 默认 **768m**。
+| 项 | 放哪里 |
+|---|---|
+| JVM 堆 / GC（`JAVA_OPTS`） | **只在 Dockerfile** |
+| 容器硬顶（`mem_limit`） | **compose 每个服务都要写**（fe/be/agent；镜像做不了） |
 
-**服务器须人工**（CD 不覆盖 compose / `.env`）：
+默认：fe `128m`、be `768m`、agent `1g`（见 `.env.example`）。deploy skill §七·六 与模板已同步。
+
+**服务器须人工**（CD 不覆盖 compose）：
 
 ```bash
-# 1) 看谁吃内存
-free -h
-sudo docker stats --no-stream
-
-# 2) 立刻止血（旧镜像也可用 JAVA_TOOL_OPTIONS）
+free -h && sudo docker stats --no-stream
 cd /opt/project/ai-job-hunter
-# 在 .env 增加 BE_MEM_LIMIT / JAVA_TOOL_OPTIONS（见 .env.example）
-# 在 docker-compose.yml 的 ai-job-hunter-be 加上 mem_limit + JAVA_TOOL_OPTIONS（对齐仓库）
-sudo docker compose up -d --force-recreate ai-job-hunter-be
-
-# 或临时：
-sudo docker update --memory=768m --memory-swap=768m ai-job-hunter-be
-# 仍建议 recreate 带上 JAVA_TOOL_OPTIONS，否则堆上限不变
+# 对齐仓库：fe/be（及 agent）都加 mem_limit 后
+sudo docker compose up -d --force-recreate
+# 期望 stats 的 LIMIT 列是 128MiB / 768MiB，而不是整机 3.8GiB
 ```
 
 勿开 `profiles: [agent]`（Playwright 更吃内存），除非机器够大。
