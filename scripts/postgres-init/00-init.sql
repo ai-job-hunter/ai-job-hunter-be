@@ -11,8 +11,8 @@
 --   CREATE DATABASE job_hunter
 --       WITH OWNER = postgres
 --       ENCODING = 'UTF8'
---       LC_COLLATE = 'en_US.utf8'
---       LC_CTYPE   = 'en_US.utf8'
+--       LC_COLLATE = 'C'
+--       LC_CTYPE   = 'C'
 --       TEMPLATE   = template0;
 --
 -- 跑成功后再做第 2 步（必须先建库才能连进去）
@@ -30,8 +30,8 @@
 CREATE DATABASE job_hunter
     WITH OWNER = postgres
     ENCODING = 'UTF8'
-    LC_COLLATE = 'en_US.utf8'
-    LC_CTYPE   = 'en_US.utf8'
+    LC_COLLATE = 'C'
+    LC_CTYPE   = 'C'
     TEMPLATE   = template0;
 
 
