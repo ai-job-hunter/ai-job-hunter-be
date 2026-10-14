@@ -64,6 +64,19 @@
 | `docker-compose.yml` | `docs/10-DEPLOYMENT.md` §1 + `docs/02-TDS.md` §基础设施 |
 | `scripts/postgres-init/` | `docs/04-ER-DESIGN.md` §扩展说明 |
 | `Dockerfile` | `docs/02-TDS.md` §构建规范 |
+| 认证 / 业务 API | `docs/05-API-SPECIFICATION.md` + 对应 `*IT` 测试；策略见 `docs/09-TEST-STRATEGY.md` |
+| 新增/调整自动化测试 | `docs/09-TEST-STRATEGY.md`（用例表 + §1.3 门禁） |
+
+---
+
+## 2.1 功能完成门禁（强制）
+
+> **每个功能开发完 → 写测试 → 测通 → 才开始下一任务。**
+
+- 本地：**用 IDEA 启动本项目后端**（确认 `/actuator/health`，勿误连 pen-bloom 等占用 8080 的进程），跑 `*LiveIT`；页面流程跑 FE `npm run test:e2e`（Playwright）
+- **禁止**为跑测去 Docker 起应用服务
+- CI：`RUN_TESTCONTAINERS=true` 时才跑 `ContextLoadsTest`
+- 细则：`docs/09-TEST-STRATEGY.md` §1.3
 
 ---
 
@@ -89,4 +102,5 @@
 
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-10-14 | v1.1 | 增加 §2.1 功能完成门禁（测通再下一任务）；测试映射到 09-TEST-STRATEGY | orjrs |
 | 2026-09-28 | v1.0 | 初次建立：明确 AI 不写远程 .env 的红线，绑定文档/代码同步约定 | orjrs |

@@ -8,8 +8,17 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-14 | v1.3 | 前端 Playwright E2E：注册自动登录 + 邮箱/用户名登录 | orjrs |
+| 2026-10-14 | v1.2 | 落地 AUTH Live API 测试；约定「功能完成 → 写测 → 通过再下一任务」 | orjrs |
 | 2026-09-23 | v1.1 | 同步 Testcontainers 2.0.5 集成测试方案（见 §2.2.2、§4.2） | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
+
+## [变更] 功能完成必须测通再继续（2026-10-14）
+
+- **变更原因**：认证用例原先只在文档表里，无代码；注册/登录改动后易回归。
+- **包含代码**：`src/test/java/com/aijobhunter/support/AbstractIntegrationTest.java`、`controller/AuthControllerIT.java`；`ContextLoadsTest` 改为继承基类。
+- **硬规则**：每个功能开发完 → 补齐对应用例（优先集成测试）→ `./gradlew test` 通过 → 才进入下一任务。见下文 **§1.3**。
+- **AUTH 预期校正**：注册成功不返回 token（登录才有）；密码无服务端最短长度校验；错误密码文案为「用户名/邮箱或密码错误」。
 
 ---
 
@@ -29,6 +38,44 @@
 | 集成测试 | API 接口、数据存储 | 关键路径覆盖 |
 | E2E 测试 | 核心用户流程 | 关键流程通过 |
 | AI 效果测试 | Agent 输出质量 | 人工评估 + 自动评估 |
+
+## 1.3 开发门禁（强制）
+
+> **每个功能开发完，必须先写测试用例并跑通，再开始下一个任务。**
+
+| 步骤 | 要求 |
+|-----|------|
+| 1. 功能代码 | 实现业务逻辑 + 同步对应 `docs/` |
+| 2. 补测试 | API：`*LiveIT`（打已启动后端）；页面流程：**Playwright**（`ai-job-hunter-fe/e2e`）；CI 冒烟可用 Testcontainers |
+| 3. 跑通 | **本地不启 Docker 装应用**；IDEA/本机启 BE+FE → `AuthApiLiveIT` + `npm run test:e2e`；CI 设 `RUN_TESTCONTAINERS=true` |
+| 4. 下一任务 | **仅当本功能相关测试全部通过** 才继续 |
+
+对照表（用例 ID ↔ 代码）：
+
+| 用例 ID | 自动化位置 | 当前预期（与实现一致） |
+|--------|-----------|----------------------|
+| AUTH-001 | `AuthApiLiveIT#auth001_*` | 注册成功，响应含用户信息，**无** token |
+| AUTH-002 | `AuthApiLiveIT#auth002_*` | `3002` 邮箱已被注册 |
+| AUTH-003 | `AuthApiLiveIT#auth003_*` | ~~至少8位~~（2026-10-14）当前无服务端长度校验，短密码可注册 |
+| AUTH-004 | `AuthApiLiveIT#auth004_*` | `account` 用户名或邮箱登录，`data.token` 有值 |
+| AUTH-005 | `AuthApiLiveIT#auth005_*` | `2001` 用户名/邮箱或密码错误 |
+| AUTH-006 | `AuthApiLiveIT#auth006_*` | 无效/过期 Bearer → 受保护路径 4xx |
+
+本地运行（先启动 **本项目** 后端，**不要**为跑测去 `docker compose up` 应用；也别误用占用 8080 的其他工程）：
+
+```bash
+# 1) API Live（后端仓）
+cd ai-job-hunter-be
+LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.AuthApiLiveIT
+
+# 2) 页面 E2E（前端仓 Playwright）
+cd ../ai-job-hunter-fe
+NUXT_DEV_PROXY_TARGET=http://127.0.0.1:8088 npm run dev -- --port 3010   # 另开终端
+PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e
+```
+
+- `AuthApiLiveIT`：后端未起则整类 **跳过**（不拉 Docker）。
+- Playwright：`e2e/auth.spec.ts` 覆盖「注册后自动登录进首页 / 邮箱·用户名登录 / 错密」。
 
 ---
 
@@ -84,19 +131,23 @@
 
 > **历史教训**：2026-09-23 修复 commit `126737d`/`fix(be): 统一升级 Testcontainers 到 2.0.5` 就是因为 Spring Boot 4.1.1 的 `spring-boot-starter-test` 间接拉入了 `testcontainers:2.0.5` (core)，但 BOM 仍把子模块固定在 `1.20.4`，造成 core / module 版本错配。详细背景见 [Issue #11481](https://github.com/testcontainers/testcontainers-java/issues/11481)。
 
-#### 2.2.2.2 ContextLoadsTest 冒烟测试
+#### 2.2.2.2 集成测试基类 + 冒烟 + 认证
 
-唯一必须存在的集成测试 `com.aijobhunter.ContextLoadsTest`，目的：CI 强制启动 Spring 上下文，校验所有 `@Service` / `@Configuration` 的 Bean 都能成功注入。
+| 类 | 作用 |
+|----|------|
+| `com.aijobhunter.controller.AuthApiLiveIT` | **本地默认**：打 IDEA 已启动后端；AUTH-001～006；不启 Docker |
+| `com.aijobhunter.support.AbstractIntegrationTest` | CI：共享 Testcontainers（PG + Redis） |
+| `com.aijobhunter.ContextLoadsTest` | CI 冒烟（需 `RUN_TESTCONTAINERS=true`）；上下文能起 |
 
 | 项 | 值 |
 |----|----|
-| 测试基类 | `@SpringBootTest(webEnvironment = RANDOM_PORT)` |
-| 容器启动 | `static` 块，`postgres.start()` + `redis.start()` |
-| Property 注入 | `@DynamicPropertySource`，把容器 host/port 注入 `spring.datasource.*` 和 `spring.data.redis.*` |
-| 启动镜像 | `postgres:18-alpine`（与生产 `docker-compose.yml` 一致）、`redis:7-alpine` |
-| Schema 初始化 | `withInitScript("schema-test.sql")`（仅创建 `app` schema，JPA `ddl-auto=update` 自动建表） |
+| 测试基类 | `AbstractIntegrationTest`（`@SpringBootTest(RANDOM_PORT)`） |
+| 容器启动 | 基类 `static` 块，`POSTGRES.start()` + `REDIS.start()` |
+| Property 注入 | `@DynamicPropertySource` → datasource / redis / jwt / deepseek 占位 |
+| 启动镜像 | `postgres:18-alpine`、`redis:7-alpine` |
+| Schema 初始化 | `withInitScript("schema-test.sql")`（创建 `app` schema） |
 
-**禁止绕过此测试**：业务代码启动报错会立即失败，阻断 CD；任何"测试 0 个就静默成功"的失效场景由本测试兜底（历史背景：2026-09-22 `ChatAgent` 启动时报 `Parameter 1 of constructor required a bean of type 'ObjectMapper'`）。
+**禁止绕过冒烟测试**：业务代码启动报错会立即失败，阻断 CD（历史背景：2026-09-22 `ChatAgent`/`ObjectMapper` bean 缺失逃逸到生产）。
 
 ### 2.2.3 E2E 测试
 
@@ -117,12 +168,12 @@
 
 | 用例ID | 用例名称 | 前置条件 | 测试步骤 | 预期结果 | 优先级 |
 |-------|---------|---------|---------|---------|-------|
-| AUTH-001 | 正常注册 | 无 | 输入有效信息提交 | 注册成功，返回token | P0 |
-| AUTH-002 | 邮箱已存在 | 已注册邮箱 | 用已注册邮箱注册 | 提示邮箱已存在 | P0 |
-| AUTH-003 | 密码过短 | 无 | 输入6位密码 | 提示密码至少8位 | P1 |
-| AUTH-004 | 正常登录 | 已注册用户 | 输入正确账号密码 | 登录成功，返回token | P0 |
-| AUTH-005 | 密码错误 | 已注册用户 | 输入错误密码 | 提示密码错误 | P0 |
-| AUTH-006 | Token过期 | 过期token | 使用过期token请求 | 提示token过期 | P0 |
+| AUTH-001 | 正常注册 | 无 | 输入有效信息提交 | 注册成功，返回用户信息（**不含 token**）；自动化：`AuthApiLiveIT` | P0 |
+| AUTH-002 | 邮箱已存在 | 已注册邮箱 | 用已注册邮箱注册 | `3002` 邮箱已被注册；`AuthApiLiveIT` | P0 |
+| AUTH-003 | 短密码 | 无 | 输入6位密码 | ~~提示至少8位~~（2026-10-14）当前无服务端长度校验，可注册成功；若日后加校验须同步改测试 | P1 |
+| AUTH-004 | 正常登录 | 已注册用户 | `account`=邮箱或用户名 + 正确密码 | `data.token` 有值；`AuthApiLiveIT` | P0 |
+| AUTH-005 | 密码错误 | 已注册用户 | 输入错误密码 | `2001` 用户名/邮箱或密码错误；`AuthApiLiveIT` | P0 |
+| AUTH-006 | Token过期 | 无效/过期 JWT | 带 `Authorization: Bearer` 访问受保护路径 | HTTP 4xx；`AuthApiLiveIT` | P0 |
 
 ### 3.1.2 简历管理模块
 
