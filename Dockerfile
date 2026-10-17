@@ -20,6 +20,10 @@ FROM eclipse-temurin:21-jre-alpine
 
 WORKDIR /app
 
+# Portainer / 应用日志用北京时间（compose 不必再写 TZ）
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Shanghai
+
 # 复制构建产物
 COPY --from=builder /app/build/libs/*.jar app.jar
 
