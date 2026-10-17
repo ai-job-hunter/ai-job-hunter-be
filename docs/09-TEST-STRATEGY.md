@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-17 | v1.4 | 用户信息 / 简历 Live IT（UsersMeLiveIT、ResumeLiveIT） | orjrs |
 | 2026-10-14 | v1.3 | 前端 Playwright E2E：注册自动登录 + 邮箱/用户名登录 | orjrs |
 | 2026-10-14 | v1.2 | 落地 AUTH Live API 测试；约定「功能完成 → 写测 → 通过再下一任务」 | orjrs |
 | 2026-09-23 | v1.1 | 同步 Testcontainers 2.0.5 集成测试方案（见 §2.2.2、§4.2） | orjrs |
@@ -60,6 +61,8 @@
 | AUTH-004 | `AuthApiLiveIT#auth004_*` | `account` 用户名或邮箱登录，`data.token` 有值 |
 | AUTH-005 | `AuthApiLiveIT#auth005_*` | `2001` 用户名/邮箱或密码错误 |
 | AUTH-006 | `AuthApiLiveIT#auth006_*` | 无效/过期 Bearer → 受保护路径 4xx |
+| USER-001～003 | `UsersMeLiveIT` | GET/PUT `/users/me`；无 Token → 4xx |
+| RES-001～005 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、删除 |
 
 本地运行（先启动 **本项目** 后端，**不要**为跑测去 `docker compose up` 应用；也别误用占用 8080 的其他工程）：
 

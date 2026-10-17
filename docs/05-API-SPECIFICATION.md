@@ -8,10 +8,17 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-17 | v1.2 | 落地 GET/PUT `/users/me`；简历 upload/list/detail/update/delete（txt 解析） | orjrs |
 | 2026-10-12 | v1.1 | 登录支持用户名或邮箱（`account` / 兼容 `email`·`username`） | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 用户信息与简历 CRUD（2026-10-17）
+
+- **变更原因**：Sprint 2 推进：认证之后补用户资料与简历管理。
+- **包含代码**：`UserController`、`ResumeController`/`ResumeService`、实体 `Resume`；前端 `/profile`、`/resumes`。
+- **说明**：txt 上传后 `status=PARSED` 并写入 `parsedData.rawText`；pdf/doc/docx 先落盘 `UPLOADED`，结构化解析后续接 Resume Agent。
 
 ## [变更] 登录支持用户名或邮箱（2026-10-12）
 
