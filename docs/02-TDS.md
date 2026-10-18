@@ -8,9 +8,20 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-17 | v1.4 | Sprint3：岗位粘贴 JD + Spring AI；明确 V1 不建 Python Agent / 不爬 BOSS | orjrs |
 | 2026-10-11 | v1.3 | Security 放行 `/actuator/health`；禁用默认 inMemory user；Dockerfile 健康检查用 127.0.0.1 | orjrs |
 | 2026-09-22 | v1.2 | 升级 Spring Boot 3 → 4.1.1（Jackson 2 → 3），修复 Agent 构造器注入歧义，新增 Testcontainers 冒烟测试（真实 PostgreSQL + Redis） | - |
 | 2026-09-06 | v1.1 | 架构调整：移除 Python BOSS Agent，Java 后端集成 Spring AI，V1 聚焦纯 AI 辅助能力 | - |
+
+---
+
+## [变更] 岗位数据走粘贴 JD（2026-10-17）
+
+**变更原因**：要从招聘站「查数据」时，V1 用粘贴 + Spring AI，避免 Playwright Agent 的封号与维护成本。
+
+**包含代码**：`domain/job/*`、`JobService`、`JobController`；复用已有 `JdAnalyzerAgent` / `MatchAgent` / `GreetAgent`。
+
+**变更前 → 变更后**：~~依赖 Python BOSS Agent 采集~~ → 用户粘贴 JD（`source=MANUAL`）+ 可选 `sourceUrl` 存档；AI 失败关键词降级。
 
 ---
 

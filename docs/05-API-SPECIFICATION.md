@@ -8,11 +8,26 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-17 | v1.4 | 岗位：粘贴 JD 创建 + 列表/详情/分析/匹配/打招呼/删除（Spring AI，无爬虫） | orjrs |
+| 2026-10-17 | v1.3 | 未携带有效 JWT 访问受保护接口统一 **401**（不再默认 403） | orjrs |
 | 2026-10-17 | v1.2 | 落地 GET/PUT `/users/me`；简历 upload/list/detail/update/delete（txt 解析） | orjrs |
 | 2026-10-12 | v1.1 | 登录支持用户名或邮箱（`account` / 兼容 `email`·`username`） | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 岗位粘贴 JD + AI 分析/匹配/打招呼（2026-10-17）
+
+- **变更原因**：Sprint 3：不建 Python Agent、不爬 BOSS；用户粘贴 JD，后端 Spring AI 分析。
+- **包含代码**：`Job` / `JobService` / `JobController`；复用 `JdAnalyzerAgent` / `MatchAgent` / `GreetAgent`（失败降级）。
+- **新增**：`POST /api/v1/jobs`（粘贴创建）；`POST /api/v1/jobs/{id}/greet`；`analyze` 同步返回完整岗位（含 analysis）。
+- **约定**：`source=MANUAL`；可选 `sourceUrl` 仅存档；LLM 失败时关键词降级，接口仍 200。
+
+## [变更] 未登录统一 401（2026-10-17）
+
+- **变更原因**：Spring Security 默认对匿名访问回 403，前端误判为权限错误且不清会话。
+- **包含代码**：`SecurityConfig` AuthenticationEntryPoint
+- **约定**：受保护接口无/无效 Bearer → HTTP **401**，body `code=2001`「未登录或登录已失效」
 
 ## [变更] 用户信息与简历 CRUD（2026-10-17）
 
@@ -537,6 +552,26 @@ POST /api/v1/resumes/{id}/versions/{versionId}/activate
 
 # 五、岗位接口
 
+> V1 数据来源：**用户粘贴 JD**（`source=MANUAL`），不做招聘网站爬取。
+
+## 5.0 粘贴 JD 创建岗位
+
+```
+POST /api/v1/jobs
+```
+
+**请求体：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|-----|------|-----|------|
+| rawDescription | String | 是 | JD 原文 |
+| title | String | 否 | 默认取原文首行 |
+| companyName / city / salaryText | String | 否 | 元信息 |
+| sourceUrl | String | 否 | 招聘页链接，仅存档 |
+| analyze | Boolean | 否 | 默认 true，创建后立即 AI 分析 |
+
+**响应：** `data` 为岗位对象（含 `analysis` / `status`）。
+
 ## 5.1 获取岗位列表
 
 ```
@@ -645,18 +680,17 @@ GET /api/v1/jobs/{id}
 POST /api/v1/jobs/{id}/analyze
 ```
 
-**响应：**
+**响应：** 同步返回完整岗位（`status=ANALYZED`，`analysis` 已写入）。LLM 不可用时降级为关键词抽取，仍返回 200。
 
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "status": "ANALYZING",
-    "estimatedTime": 10
-  }
-}
+## 5.3.1 生成打招呼话术
+
 ```
+POST /api/v1/jobs/{id}/greet
+```
+
+**请求体（可选）：** `{ "resumeId": "uuid", "style": "friendly" }`
+
+**响应：** `{ "jobId", "greetingText", "length", "style", "highlightedPoints" }`；同时写入岗位 `greetingText`，状态可为 `GREETED`。
 
 ## 5.4 获取岗位匹配度
 

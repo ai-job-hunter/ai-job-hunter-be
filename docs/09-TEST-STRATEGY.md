@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-17 | v1.5 | 岗位 JobLiveIT（粘贴 JD / 分析 / 匹配 / 打招呼 / 删除） | orjrs |
 | 2026-10-17 | v1.4 | 用户信息 / 简历 Live IT（UsersMeLiveIT、ResumeLiveIT） | orjrs |
 | 2026-10-14 | v1.3 | 前端 Playwright E2E：注册自动登录 + 邮箱/用户名登录 | orjrs |
 | 2026-10-14 | v1.2 | 落地 AUTH Live API 测试；约定「功能完成 → 写测 → 通过再下一任务」 | orjrs |
@@ -63,6 +64,7 @@
 | AUTH-006 | `AuthApiLiveIT#auth006_*` | 无效/过期 Bearer → 受保护路径 4xx |
 | USER-001～003 | `UsersMeLiveIT` | GET/PUT `/users/me`；无 Token → 4xx |
 | RES-001～005 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、删除 |
+| JOB-001～007 | `JobLiveIT` | 粘贴 JD、列表、详情、分析、匹配、打招呼、删除（LLM 失败可降级） |
 
 本地运行（先启动 **本项目** 后端，**不要**为跑测去 `docker compose up` 应用；也别误用占用 8080 的其他工程）：
 

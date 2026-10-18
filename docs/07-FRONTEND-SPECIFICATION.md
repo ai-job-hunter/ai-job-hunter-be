@@ -8,11 +8,46 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-17 | v1.7 | 岗位页：粘贴 JD / 列表 / 详情（分析·匹配·打招呼） | orjrs |
+| 2026-10-17 | v1.6 | API 401/403 清登录态；未登录后端改回 401 | orjrs |
+| 2026-10-17 | v1.5 | 登录后壳层/简历上传列表/资料页对齐黛青纸面 | orjrs |
 | 2026-10-13 | v1.4 | 登录/注册改黛青水墨风 + lonely √3 品牌标 | orjrs |
 | 2026-10-12 | v1.3 | 登录页支持用户名或邮箱（`account`） | orjrs |
 | 2026-10-12 | v1.2 | ~~登录仅 email~~；解析 ApiResponse.data.token；注册后自动登录 | orjrs |
 | 2026-10-11 | v1.1 | 对齐 cogniforge-web 方案 A：Nginx 同源反代 `/api`，构建时 `API_BASE=` | orjrs |
 | 2026-09-02 | v1.0 | 初始版本（Vue 3 + Nuxt 3 + shadcn-vue） | - |
+
+---
+
+## [变更] 岗位粘贴 JD 页面（2026-10-17）
+
+**变更原因**：Sprint 3 不做爬虫，前端提供粘贴 JD → 分析 / 匹配 / 打招呼。
+
+**包含代码**：`pages/jobs/index.vue`、`pages/jobs/[id].vue`、`layouts/default.vue`、`pages/index.vue`
+
+**变更前 → 变更后**：仪表盘「职位搜索」占位 → `/jobs` 可用；导航增加「岗位」。
+
+---
+
+## [变更] 未登录 API 401 + 前端清会话（2026-10-17）
+
+**变更原因**：浏览器残留失效 JWT 时，后端默认回 403，前端只处理 401，页面一直报「403」且不跳登录。
+
+**包含代码**：`SecurityConfig`（AuthenticationEntryPoint）、`JwtAuthenticationFilter`（ROLE_USER）、`composables/useApi.ts`
+
+**变更前 → 变更后**：匿名访问受保护接口 ~~403~~ → **401** JSON；前端遇 401/403 清 token 并跳转登录。
+
+---
+
+## [变更] 登录后应用壳与简历上传视觉（黛青纸面）（2026-10-17）
+
+**变更原因**：仪表盘 / 简历上传 / 列表仍是灰白 slate 表单，与登录页黛青风割裂，上传区观感差。
+
+**包含代码**：`layouts/default.vue`、`pages/index.vue`、`pages/profile.vue`、`pages/resumes/index.vue`、`pages/resumes/[id].vue`、`assets/css/main.css`（`.app-*`）
+
+**变更前 → 变更后**：扁平 slate 卡片 + 原生 file input → 纸面渐变壳 + 拖拽上传区 + 统一按钮/列表/表单组件类（`--ink-*`）。
+
+**关键差异**：新增 `.app-shell` / `.app-drop` / `.app-panel` / `.app-list` 等；导航改为黛青纸面 sticky header。
 
 ---
 
