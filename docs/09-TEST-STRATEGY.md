@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-10-18 | v1.6 | CI：单元测试 + Testcontainers ApiFlowIT；修 smoke 假绿；FE jobs E2E | orjrs |
 | 2026-10-17 | v1.5 | 岗位 JobLiveIT（粘贴 JD / 分析 / 匹配 / 打招呼 / 删除） | orjrs |
 | 2026-10-17 | v1.4 | 用户信息 / 简历 Live IT（UsersMeLiveIT、ResumeLiveIT） | orjrs |
 | 2026-10-14 | v1.3 | 前端 Playwright E2E：注册自动登录 + 邮箱/用户名登录 | orjrs |
@@ -65,13 +66,27 @@
 | USER-001～003 | `UsersMeLiveIT` | GET/PUT `/users/me`；无 Token → 4xx |
 | RES-001～005 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、删除 |
 | JOB-001～007 | `JobLiveIT` | 粘贴 JD、列表、详情、分析、匹配、打招呼、删除（LLM 失败可降级） |
+| UNIT-JWT / UNIT-JOB | `JwtTokenProviderTest`、`JobServiceTest` | CI unit job 必跑，不依赖 Docker |
+| FLOW-001～005 | `ApiFlowIT` | CI smoke：Testcontainers 注册→登录→me→简历→岗位→匹配/打招呼 |
+
+## [变更] CI 真绿 + 功能打通门禁（2026-10-18）
+
+- **变更原因**：原先 smoke 未设 `RUN_TESTCONTAINERS`，`ContextLoadsTest` 被跳过仍显示成功；unit job 几乎无断言。
+- **BE CI**：unit → Jwt/JobService；smoke → `RUN_TESTCONTAINERS=true` 跑 ContextLoads + **ApiFlowIT**（真实 PG/Redis）。
+- **FE CI**：新增 `ci.yml` 做 `npm run generate`；Playwright 本地强制；可选 Variables `E2E_WITH_BACKEND=true`。
+- **本地打通**：每个功能仍须 `*LiveIT`（IDEA 启 BE）+ `npm run test:e2e`（含 `e2e/jobs.spec.ts`）。
 
 本地运行（先启动 **本项目** 后端，**不要**为跑测去 `docker compose up` 应用；也别误用占用 8080 的其他工程）：
 
 ```bash
-# 1) API Live（后端仓）
+# 0) CI 同款单元测试（无需后端）
 cd ai-job-hunter-be
+./gradlew test --tests com.aijobhunter.common.security.JwtTokenProviderTest \
+  --tests com.aijobhunter.service.JobServiceTest
+
+# 1) API Live（后端仓，IDEA/本机已启 BE）
 LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.AuthApiLiveIT
+LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.JobLiveIT
 
 # 2) 页面 E2E（前端仓 Playwright）
 cd ../ai-job-hunter-fe
@@ -79,8 +94,9 @@ NUXT_DEV_PROXY_TARGET=http://127.0.0.1:8088 npm run dev -- --port 3010   # 另�
 PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e
 ```
 
-- `AuthApiLiveIT`：后端未起则整类 **跳过**（不拉 Docker）。
-- Playwright：`e2e/auth.spec.ts` 覆盖「注册后自动登录进首页 / 邮箱·用户名登录 / 错密」。
+- `*LiveIT`：后端未起则整类 **跳过**（不拉 Docker）。
+- Playwright：`e2e/auth.spec.ts` + `e2e/jobs.spec.ts`（注册登录 → 粘贴 JD → 详情）。
+- CI smoke：`ApiFlowIT` 在 Actions 内起容器，验证契约，不代替本地浏览器 E2E。
 
 ---
 

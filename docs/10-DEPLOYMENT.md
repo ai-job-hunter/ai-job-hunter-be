@@ -16,7 +16,14 @@
 | 2026-10-12 | v1.6 | ~~自动部署用时间戳 tag~~（v1.7 改为双 tag + 服务器 latest，与 cogniforge 一致） | orjrs |
 | 2026-10-12 | v1.5 | 删除后端 CORS（方案 A 同源 + 本地 Nuxt 代理），避免 Origin 白名单 403 | orjrs |
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
+| 2026-10-18 | v1.4 | CI smoke 强制 RUN_TESTCONTAINERS + ApiFlowIT；unit 拆 Jwt/JobService | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
+
+## [变更] CI 测试真执行（2026-10-18）
+
+- **变更原因**：smoke 未设 `RUN_TESTCONTAINERS` 导致上下文测试被跳过仍绿灯。
+- **包含代码**：`.github/workflows/ci.yml`；新增 `ApiFlowIT` / 单元测试。
+- **约定**：unit job 只跑 Jwt/JobService；smoke 必须带 `RUN_TESTCONTAINERS=true` 跑 ContextLoads + ApiFlowIT。
 | 2026-09-28 | v1.2 | fix：三处 `sed -i` 改 `tee` 原子写入；加 §0 边界声明；详见 §5「工作流踩坑」 | orjrs |
 | 2026-09-24 | v1.1 | 通知改用 GitHub Issue（去 SMTP 配置），自动去重告警 | orjrs |
 | 2026-09-24 | v1.0 | 初始版本（自动回滚 + 邮件通知 + 手动触发） | orjrs |

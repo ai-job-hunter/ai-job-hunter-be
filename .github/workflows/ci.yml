@@ -91,8 +91,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run tests
-        run: ./gradlew test --no-daemon --info
+      # 只跑不依赖 Docker / 本机已启后端的单元测试；*LiveIT / ApiFlowIT / ContextLoadsTest 由 smoke 管
+      - name: Run unit tests
+        run: |
+          ./gradlew test --no-daemon \
+            --tests 'com.aijobhunter.common.security.JwtTokenProviderTest' \
+            --tests 'com.aijobhunter.service.JobServiceTest'
 
       - name: Upload test results
         if: always()
@@ -145,8 +149,14 @@ jobs:
           docker pull postgres:18-alpine || true
           docker pull redis:7-alpine || true
 
-      - name: Run Spring context smoke test
-        run: ./gradlew test --no-daemon --tests ContextLoadsTest --info
+      # 必须设 RUN_TESTCONTAINERS，否则 ContextLoadsTest / ApiFlowIT 会被跳过却仍显示绿色
+      - name: Run Spring context + API flow (Testcontainers)
+        env:
+          RUN_TESTCONTAINERS: "true"
+        run: |
+          ./gradlew test --no-daemon \
+            --tests 'com.aijobhunter.ContextLoadsTest' \
+            --tests 'com.aijobhunter.controller.ApiFlowIT'
 
       - name: Upload smoke test results
         if: always()
