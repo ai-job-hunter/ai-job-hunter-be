@@ -1,14 +1,25 @@
 package com.aijobhunter.service;
 
+import com.aijobhunter.agent.ResumeAgent;
+import com.aijobhunter.agent.ResumeRewriteAgent;
+import com.aijobhunter.agent.model.ResumeAnalysisResult;
+import com.aijobhunter.agent.model.ResumeRewriteResult;
+import com.aijobhunter.domain.job.Job;
+import com.aijobhunter.domain.job.JobRepository;
 import com.aijobhunter.domain.resume.Resume;
 import com.aijobhunter.domain.resume.ResumeRepository;
+import com.aijobhunter.dto.AnalyzeResumeRequest;
 import com.aijobhunter.dto.ResumeDTO;
+import com.aijobhunter.dto.RewriteResumeRequest;
 import com.aijobhunter.dto.UpdateResumeRequest;
+import com.aijobhunter.exception.AgentException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -22,6 +33,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ResumeService {
@@ -30,6 +42,10 @@ public class ResumeService {
     private static final long MAX_BYTES = 10L * 1024 * 1024;
 
     private final ResumeRepository resumeRepository;
+    private final JobRepository jobRepository;
+    private final ResumeAgent resumeAgent;
+    private final ResumeRewriteAgent resumeRewriteAgent;
+    private final ObjectMapper objectMapper;
 
     @Value("${app.upload.dir:./uploads}")
     private String uploadDir;
@@ -148,6 +164,114 @@ public class ResumeService {
                 // 文件清理失败不影响主流程
             }
         }
+    }
+
+    /**
+     * 同步 AI 分析简历；LLM 失败时降级写入基础评估。
+     */
+    @Transactional
+    public ResumeDTO analyze(String userId, String id, AnalyzeResumeRequest request) {
+        Resume resume = requireResume(userId, id);
+        String content = extractText(resume);
+        String targetJob = resolveTargetJob(userId, request == null ? null : request.getTargetJobId(),
+                request == null ? null : request.getTargetJob());
+
+        ResumeAnalysisResult result;
+        try {
+            result = resumeAgent.analyze(content, targetJob).getData();
+        } catch (AgentException e) {
+            log.warn("ResumeAgent failed, degrade: {}", e.getMessage());
+            result = resumeAgent.degradeAnalyze();
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> analysisMap = objectMapper.convertValue(result, Map.class);
+        resume.setAnalysis(analysisMap);
+        resume.setStatus(Resume.ResumeStatus.ANALYZED);
+
+        // 把技能写回 parsedData，供岗位匹配复用
+        if (result.getSkillAnalysis() != null && result.getSkillAnalysis().getTechnicalSkills() != null) {
+            Map<String, Object> parsed = resume.getParsedData() == null
+                    ? new HashMap<>()
+                    : new HashMap<>(resume.getParsedData());
+            parsed.put("skills", result.getSkillAnalysis().getTechnicalSkills());
+            resume.setParsedData(parsed);
+        }
+
+        return toDto(resumeRepository.save(resume));
+    }
+
+    /**
+     * 同步 AI 重写建议；结果写入 analysis.rewrite，不覆盖原文。
+     */
+    @Transactional
+    public ResumeDTO rewrite(String userId, String id, RewriteResumeRequest request) {
+        Resume resume = requireResume(userId, id);
+        String content = extractText(resume);
+        String jobDesc = "";
+        if (request != null && request.getTargetJobId() != null && !request.getTargetJobId().isBlank()) {
+            Job job = jobRepository.findByIdAndUserId(request.getTargetJobId(), userId)
+                    .orElseThrow(() -> new IllegalArgumentException("目标岗位不存在"));
+            jobDesc = (job.getTitle() == null ? "" : job.getTitle() + "\n")
+                    + (job.getRawDescription() == null ? "" : job.getRawDescription());
+        }
+        String special = request == null ? null : request.getSpecialRequirements();
+        if (request != null && request.getTone() != null && !request.getTone().isBlank()) {
+            String toneNote = "语气风格：" + request.getTone();
+            special = special == null || special.isBlank() ? toneNote : special + "；" + toneNote;
+        }
+
+        ResumeRewriteResult result;
+        try {
+            result = resumeRewriteAgent.rewrite(content, jobDesc.isBlank() ? "（未指定岗位）" : jobDesc, special)
+                    .getData();
+        } catch (AgentException e) {
+            log.warn("ResumeRewriteAgent failed, degrade: {}", e.getMessage());
+            result = resumeRewriteAgent.degradeRewrite();
+        }
+
+        Map<String, Object> analysis = resume.getAnalysis() == null
+                ? new HashMap<>()
+                : new HashMap<>(resume.getAnalysis());
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rewriteMap = objectMapper.convertValue(result, Map.class);
+        analysis.put("rewrite", rewriteMap);
+        resume.setAnalysis(analysis);
+
+        return toDto(resumeRepository.save(resume));
+    }
+
+    private Resume requireResume(String userId, String id) {
+        return resumeRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("简历不存在"));
+    }
+
+    private String resolveTargetJob(String userId, String jobId, String targetJobText) {
+        if (jobId != null && !jobId.isBlank()) {
+            Job job = jobRepository.findByIdAndUserId(jobId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("目标岗位不存在"));
+            return (job.getTitle() == null ? "" : job.getTitle() + "\n")
+                    + (job.getRawDescription() == null ? "" : job.getRawDescription());
+        }
+        if (targetJobText != null && !targetJobText.isBlank()) {
+            return targetJobText.trim();
+        }
+        return "（未指定）";
+    }
+
+    private static String extractText(Resume resume) {
+        Map<String, Object> parsed = resume.getParsedData();
+        if (parsed != null) {
+            Object raw = parsed.get("rawText");
+            if (raw instanceof String s && !s.isBlank()) {
+                return truncate(s, 40_000);
+            }
+            Object summary = parsed.get("summary");
+            if (summary instanceof String s && !s.isBlank()) {
+                return truncate(s, 40_000);
+            }
+        }
+        throw new IllegalArgumentException("当前简历无可分析文本，请上传 txt 或等待 PDF 解析接入");
     }
 
     private static Resume.ResumeType parseType(String type) {

@@ -2,8 +2,10 @@ package com.aijobhunter.controller;
 
 import com.aijobhunter.common.security.SecurityUtils;
 import com.aijobhunter.domain.user.User;
+import com.aijobhunter.dto.AnalyzeResumeRequest;
 import com.aijobhunter.dto.ApiResponse;
 import com.aijobhunter.dto.ResumeDTO;
+import com.aijobhunter.dto.RewriteResumeRequest;
 import com.aijobhunter.dto.UpdateResumeRequest;
 import com.aijobhunter.service.ResumeService;
 import lombok.RequiredArgsConstructor;
@@ -68,5 +70,25 @@ public class ResumeController {
         User user = SecurityUtils.requireCurrentUser();
         resumeService.delete(user.getId(), id);
         return ResponseEntity.ok(ApiResponse.success("删除成功", null));
+    }
+
+    /** 同步 AI 分析（失败降级）；返回完整简历含 analysis */
+    @PostMapping("/{id}/analyze")
+    public ResponseEntity<ApiResponse<ResumeDTO>> analyze(
+            @PathVariable String id,
+            @RequestBody(required = false) AnalyzeResumeRequest request) {
+        User user = SecurityUtils.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.success(
+                "分析完成", resumeService.analyze(user.getId(), id, request)));
+    }
+
+    /** 同步 AI 重写建议；结果写入 analysis.rewrite */
+    @PostMapping("/{id}/rewrite")
+    public ResponseEntity<ApiResponse<ResumeDTO>> rewrite(
+            @PathVariable String id,
+            @RequestBody(required = false) RewriteResumeRequest request) {
+        User user = SecurityUtils.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.success(
+                "重写完成", resumeService.rewrite(user.getId(), id, request)));
     }
 }

@@ -8,6 +8,9 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-06 | v1.9 | StatsLiveIT；ApiFlowIT FLOW-007；FE stats E2E | orjrs |
+| 2026-10-26 | v1.8 | ConversationLiveIT + ApiFlowIT FLOW-006；FE conversations E2E | orjrs |
+| 2026-10-26 | v1.7 | ResumeLiveIT 增 RES-006/007 分析与重写 | orjrs |
 | 2026-10-18 | v1.6 | CI：单元测试 + Testcontainers ApiFlowIT；修 smoke 假绿；FE jobs E2E | orjrs |
 | 2026-10-17 | v1.5 | 岗位 JobLiveIT（粘贴 JD / 分析 / 匹配 / 打招呼 / 删除） | orjrs |
 | 2026-10-17 | v1.4 | 用户信息 / 简历 Live IT（UsersMeLiveIT、ResumeLiveIT） | orjrs |
@@ -64,10 +67,12 @@
 | AUTH-005 | `AuthApiLiveIT#auth005_*` | `2001` 用户名/邮箱或密码错误 |
 | AUTH-006 | `AuthApiLiveIT#auth006_*` | 无效/过期 Bearer → 受保护路径 4xx |
 | USER-001～003 | `UsersMeLiveIT` | GET/PUT `/users/me`；无 Token → 4xx |
-| RES-001～005 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、删除 |
+| RES-001～007 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、分析、重写、删除 |
 | JOB-001～007 | `JobLiveIT` | 粘贴 JD、列表、详情、分析、匹配、打招呼、删除（LLM 失败可降级） |
+| CHAT-001～006 / APP-001～003 | `ConversationLiveIT` | 创建对话、消息、推荐回复、投递、看板、改状态 |
+| STAT-001～004 / TPL-001 / BL-001 | `StatsLiveIT` | 今日/漏斗/趋势/周报；模板与黑名单 CRUD |
 | UNIT-JWT / UNIT-JOB | `JwtTokenProviderTest`、`JobServiceTest` | CI unit job 必跑，不依赖 Docker |
-| FLOW-001～005 | `ApiFlowIT` | CI smoke：Testcontainers 注册→登录→me→简历→岗位→匹配/打招呼 |
+| FLOW-001～007 | `ApiFlowIT` | CI smoke：…→投递看板→统计漏斗/模板/黑名单 |
 
 ## [变更] CI 真绿 + 功能打通门禁（2026-10-18）
 
@@ -87,6 +92,7 @@ cd ai-job-hunter-be
 # 1) API Live（后端仓，IDEA/本机已启 BE）
 LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.AuthApiLiveIT
 LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.JobLiveIT
+LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.ConversationLiveIT
 
 # 2) 页面 E2E（前端仓 Playwright）
 cd ../ai-job-hunter-fe
@@ -95,8 +101,13 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e
 ```
 
 - `*LiveIT`：后端未起则整类 **跳过**（不拉 Docker）。
-- Playwright：`e2e/auth.spec.ts` + `e2e/jobs.spec.ts`（注册登录 → 粘贴 JD → 详情）。
+- Playwright：`e2e/auth.spec.ts` + `e2e/jobs.spec.ts` + `e2e/conversations.spec.ts`（沟通/看板）。
 - CI smoke：`ApiFlowIT` 在 Actions 内起容器，验证契约，不代替本地浏览器 E2E。
+
+## [变更] Sprint4 沟通与投递测试（2026-10-26）
+
+- **变更原因**：落地对话/推荐回复/投递看板后补齐门禁。
+- **包含代码**：`ConversationLiveIT`、`ApiFlowIT#conversationAndApplication`、`e2e/conversations.spec.ts`。
 
 ---
 

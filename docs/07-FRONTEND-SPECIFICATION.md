@@ -8,6 +8,9 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-06 | v1.10 | 统计页 / 设置页；仪表盘今日概览 | orjrs |
+| 2026-10-26 | v1.9 | 沟通列表/详情 + 投递看板；导航与仪表盘入口 | orjrs |
+| 2026-10-26 | v1.8 | 简历详情：AI 分析与优化建议 | orjrs |
 | 2026-10-17 | v1.7 | 岗位页：粘贴 JD / 列表 / 详情（分析·匹配·打招呼） | orjrs |
 | 2026-10-17 | v1.6 | API 401/403 清登录态；未登录后端改回 401 | orjrs |
 | 2026-10-17 | v1.5 | 登录后壳层/简历上传列表/资料页对齐黛青纸面 | orjrs |
@@ -16,6 +19,32 @@
 | 2026-10-12 | v1.2 | ~~登录仅 email~~；解析 ApiResponse.data.token；注册后自动登录 | orjrs |
 | 2026-10-11 | v1.1 | 对齐 cogniforge-web 方案 A：Nginx 同源反代 `/api`，构建时 `API_BASE=` | orjrs |
 | 2026-09-02 | v1.0 | 初始版本（Vue 3 + Nuxt 3 + shadcn-vue） | - |
+
+---
+
+## [变更] 统计与策略设置（2026-11-06）
+
+**变更原因**：Sprint 5：看清求职漏斗、生成周报、管理模板与黑名单。
+
+**包含代码**：`pages/stats/index.vue`、`pages/settings/index.vue`、仪表盘增强；`e2e/stats.spec.ts`。
+
+**变更前 → 变更后**：仪表盘仅数量 → 含今日概览；新增 `/stats`、`/settings`。
+
+## [变更] 沟通与投递看板（2026-10-26）
+
+**变更原因**：Sprint 4 最小闭环：手动记对话 + AI 推荐回复 + 投递状态看板。
+
+**包含代码**：`pages/conversations/index.vue`、`pages/conversations/[id].vue`、`pages/applications/index.vue`；导航 `layouts/default.vue`；岗位详情「标记已投递」；`e2e/conversations.spec.ts`。
+
+**变更前 → 变更后**：仪表盘「已申请」占位 → 可进沟通/投递；岗位详情可记投递。
+
+## [变更] 简历详情 AI 分析 / 优化（2026-10-26）
+
+**变更原因**：补齐 Resume Agent 产品入口。
+
+**包含代码**：`pages/resumes/[id].vue`、`e2e/resume-ai.spec.ts`
+
+**变更前 → 变更后**：详情仅展示解析文本 → 可触发分析/重写并展示 `analysis` / `analysis.rewrite`。
 
 ---
 

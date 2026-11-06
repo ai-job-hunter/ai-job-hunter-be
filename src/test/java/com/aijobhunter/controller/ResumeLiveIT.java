@@ -130,6 +130,31 @@ class ResumeLiveIT {
 
     @Test
     @Order(5)
+    @DisplayName("RES-006 AI 分析简历（可降级）")
+    void analyze() throws Exception {
+        HttpResponse<String> res = postAuth("/api/v1/resumes/" + resumeId + "/analyze", """
+                {"targetJob":"Java 后端工程师"}
+                """);
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("ANALYZED");
+        assertThat(res.body()).contains("analysis");
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("RES-007 AI 重写建议（可降级）")
+    void rewrite() throws Exception {
+        HttpResponse<String> res = postAuth("/api/v1/resumes/" + resumeId + "/rewrite", """
+                {"specialRequirements":"突出 Spring Boot","tone":"professional"}
+                """);
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("rewrite");
+    }
+
+    @Test
+    @Order(7)
     @DisplayName("RES-005 删除简历")
     void delete() throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + "/api/v1/resumes/" + resumeId))
@@ -142,6 +167,16 @@ class ResumeLiveIT {
 
         HttpResponse<String> again = getAuth("/api/v1/resumes/" + resumeId);
         assertThat(again.statusCode()).isEqualTo(400);
+    }
+
+    private static HttpResponse<String> postAuth(String path, String json) throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + path))
+                .timeout(Duration.ofSeconds(90))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+        return CLIENT.send(req, HttpResponse.BodyHandlers.ofString());
     }
 
     private static byte[] multipartBody(

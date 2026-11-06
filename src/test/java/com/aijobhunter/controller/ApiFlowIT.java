@@ -159,6 +159,62 @@ class ApiFlowIT extends AbstractIntegrationTest {
         assertThat(greet.body()).contains("greetingText");
     }
 
+    @Test
+    @Order(6)
+    @DisplayName("FLOW-006 创建对话 + AI 推荐回复 + 投递看板")
+    void conversationAndApplication() throws Exception {
+        HttpResponse<String> conv = postAuth("/api/v1/conversations", """
+                {
+                  "jobId":"%s",
+                  "hrName":"流程HR",
+                  "firstHrMessage":"方便聊聊期望薪资吗？"
+                }
+                """.formatted(jobId));
+        assertThat(conv.statusCode()).isEqualTo(200);
+        assertThat(code(conv.body())).isEqualTo(0);
+        String conversationId = firstId(conv.body());
+        assertThat(conversationId).isNotBlank();
+
+        HttpResponse<String> suggest = getAuth("/api/v1/conversations/" + conversationId + "/suggested-reply");
+        assertThat(suggest.statusCode()).isEqualTo(200);
+        assertThat(code(suggest.body())).isEqualTo(0);
+        assertThat(suggest.body()).contains("suggestions");
+
+        HttpResponse<String> app = postAuth("/api/v1/applications", """
+                {"jobId":"%s","resumeId":"%s"}
+                """.formatted(jobId, resumeId));
+        assertThat(app.statusCode()).isEqualTo(200);
+        assertThat(code(app.body())).isEqualTo(0);
+        assertThat(app.body()).contains("SUBMITTED");
+
+        HttpResponse<String> kanban = getAuth("/api/v1/applications/kanban");
+        assertThat(kanban.statusCode()).isEqualTo(200);
+        assertThat(code(kanban.body())).isEqualTo(0);
+        assertThat(kanban.body()).contains("columns");
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("FLOW-007 统计漏斗 + 模板 + 黑名单")
+    void statsTemplateBlacklist() throws Exception {
+        HttpResponse<String> funnel = getAuth("/api/v1/stats/funnel");
+        assertThat(funnel.statusCode()).isEqualTo(200);
+        assertThat(code(funnel.body())).isEqualTo(0);
+        assertThat(funnel.body()).contains("funnel");
+
+        HttpResponse<String> tpl = postAuth("/api/v1/templates", """
+                {"name":"流程模板","content":"您好","isDefault":false}
+                """);
+        assertThat(tpl.statusCode()).isEqualTo(200);
+        assertThat(code(tpl.body())).isEqualTo(0);
+
+        HttpResponse<String> bl = postAuth("/api/v1/blacklist", """
+                {"type":"KEYWORD","value":"保险","reason":"不感兴趣"}
+                """);
+        assertThat(bl.statusCode()).isEqualTo(200);
+        assertThat(code(bl.body())).isEqualTo(0);
+    }
+
     private HttpResponse<String> getAuth(String path) throws Exception {
         return CLIENT.send(HttpRequest.newBuilder(URI.create(base() + path))
                 .timeout(Duration.ofSeconds(60))

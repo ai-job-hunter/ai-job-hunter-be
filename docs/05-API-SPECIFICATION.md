@@ -8,6 +8,9 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-06 | v1.7 | Sprint5：统计 today/trend/funnel/weekly-report；模板与黑名单 CRUD | orjrs |
+| 2026-10-26 | v1.6 | Sprint4：沟通对话 CRUD + AI 推荐回复；投递创建/看板/改状态 | orjrs |
+| 2026-10-26 | v1.5 | 简历 AI 分析/重写同步 API（`/resumes/{id}/analyze|rewrite`） | orjrs |
 | 2026-10-17 | v1.4 | 岗位：粘贴 JD 创建 + 列表/详情/分析/匹配/打招呼/删除（Spring AI，无爬虫） | orjrs |
 | 2026-10-17 | v1.3 | 未携带有效 JWT 访问受保护接口统一 **401**（不再默认 403） | orjrs |
 | 2026-10-17 | v1.2 | 落地 GET/PUT `/users/me`；简历 upload/list/detail/update/delete（txt 解析） | orjrs |
@@ -15,6 +18,25 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 统计 / 模板 / 黑名单（2026-11-06）
+
+- **变更原因**：Sprint 5：仪表盘与求职漏斗；打招呼模板与黑名单本地管理。
+- **包含代码**：`StatsService`/`StatsController`；`GreetingTemplate*`；`Blacklist*`；`StatsLiveIT`。
+- **约定**：统计从岗位/对话/投递**实时聚合**（不落 `daily_stats`）；周报走 `WeeklyReportAgent`，失败降级仍 200；自动化模式 / BOSS Cookie 仍不做。
+
+## [变更] 沟通与投递最小闭环（2026-10-26）
+
+- **变更原因**：Sprint 4：手动录入 HR 对话 + ChatAgent 推荐回复 + 投递看板（不接 BOSS 实时同步）。
+- **包含代码**：`Conversation`/`Message`/`Application` 实体；`ConversationService`/`ApplicationService` + Controller；`ConversationLiveIT`。
+- **新增**：`POST /api/v1/conversations`（可带 `firstHrMessage`）；消息 `direction=INBOUND|OUTBOUND`；`GET …/suggested-reply` / `POST …/send-suggested-reply`；`POST /api/v1/applications`；`GET …/kanban`；`PUT …/{id}/status`。
+- **约定**：推荐回复 LLM 失败降级仍 200；同一用户同一岗位不可重复投递；投递成功可将岗位状态置为 `APPLIED`；V1 无 timeline / BOSS 抓取。
+
+## [变更] 简历 AI 分析 / 重写（2026-10-26）
+
+- **变更原因**：补齐 Sprint2 Resume Agent；详情页可分析优劣并生成优化建议。
+- **包含代码**：`ResumeService#analyze/rewrite`、`ResumeController`；复用 `ResumeAgent` / `ResumeRewriteAgent`。
+- **约定**：同步返回完整简历；`status=ANALYZED`；重写结果写入 `analysis.rewrite`（不覆盖原文）；LLM 失败降级仍 200；无 `rawText` 的 PDF 暂不可分析。
 
 ## [变更] 岗位粘贴 JD + AI 分析/匹配/打招呼（2026-10-17）
 
@@ -459,25 +481,10 @@ DELETE /api/v1/resumes/{id}
 POST /api/v1/resumes/{id}/analyze
 ```
 
-**响应：**
+**请求体（可选）：** `{ "targetJobId": "uuid", "targetJob": "Java 后端" }`
 
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "id": "uuid",
-    "status": "ANALYZING",
-    "estimatedTime": 30
-  }
-}
-```
-
-**轮询状态：**
-
-```
-GET /api/v1/resumes/{id}/analysis/status
-```
+**响应：** 同步返回完整简历（`status=ANALYZED`，`analysis` 已写入）。LLM 不可用时降级评估，仍 200。  
+~~异步 ANALYZING + 轮询~~（2026-10-26：V1 改为同步）。
 
 ## 4.7 重写简历
 
@@ -489,25 +496,13 @@ POST /api/v1/resumes/{id}/rewrite
 
 ```json
 {
-  "targetJobId": "uuid",      // 可选，针对特定岗位优化
-  "focusOn": ["skills", "experience"],  // 可选，优化重点
-  "tone": "professional"      // professional / casual / technical
+  "targetJobId": "uuid",
+  "specialRequirements": "突出微服务经验",
+  "tone": "professional"
 }
 ```
 
-**响应：**
-
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "versionId": "uuid",
-    "status": "REWRITING",
-    "estimatedTime": 60
-  }
-}
-```
+**响应：** 同步返回完整简历；优化稿在 `data.analysis.rewrite`（不覆盖原文 `parsedData`）。
 
 ## 4.8 获取简历版本列表
 
@@ -757,6 +752,24 @@ DELETE /api/v1/jobs/{id}
 
 # 六、沟通接口
 
+## 6.0 创建对话（手动）
+
+```
+POST /api/v1/conversations
+```
+
+**请求体：**
+
+```json
+{
+  "jobId": "uuid（可选）",
+  "hrName": "李HR",
+  "firstHrMessage": "您好，方便聊聊吗？（可选，作为首条 INBOUND）"
+}
+```
+
+**响应：** 同列表项结构（含 `id` / `hrName` / `job` / `lastMessage` 等）。
+
 ## 6.1 获取对话列表
 
 ```
@@ -884,9 +897,12 @@ POST /api/v1/conversations/{id}/messages
 
 ```json
 {
-  "content": "我的期望薪资是30k-35k"
+  "content": "我的期望薪资是30k-35k",
+  "direction": "OUTBOUND"
 }
 ```
+
+`direction`：`INBOUND`=录入 HR 来信；`OUTBOUND`=我发出（默认）。
 
 ## 6.4 获取 AI 推荐回复
 
@@ -939,6 +955,24 @@ POST /api/v1/conversations/{id}/send-suggested-reply
 ---
 
 # 七、投递接口
+
+## 7.0 创建投递
+
+```
+POST /api/v1/applications
+```
+
+**请求体：**
+
+```json
+{
+  "jobId": "uuid",
+  "resumeId": "uuid",
+  "applyNote": "可选备注"
+}
+```
+
+同一用户同一岗位已投递过 → `IllegalStateException`（冲突）。成功后岗位状态可变为 `APPLIED`。
 
 ## 7.1 获取投递列表
 
@@ -1084,10 +1118,11 @@ PUT /api/v1/applications/{id}/status
 
 ```json
 {
-  "status": "INTERVIEWING",
-  "note": "约了明天上午10点面试"
+  "status": "INTERVIEWING"
 }
 ```
+
+`status` 枚举：`SUBMITTED` / `VIEWED` / `REPLIED` / `INTERVIEWING` / `OFFERED` / `REJECTED` / `WITHDRAWN`。V1 暂不落 timeline note。
 
 ---
 
