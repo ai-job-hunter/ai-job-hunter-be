@@ -94,8 +94,18 @@ public class ResumeService {
             parsed.put("rawText", truncate(text, 50_000));
             parsed.put("summary", truncate(text, 500));
             status = Resume.ResumeStatus.PARSED;
+        } else if ("pdf".equals(ext)) {
+            String text = extractPdfText(target);
+            if (text != null && !text.isBlank()) {
+                parsed.put("rawText", truncate(text, 50_000));
+                parsed.put("summary", truncate(text, 500));
+                parsed.put("parser", "pdfbox-3.0.8");
+                status = Resume.ResumeStatus.PARSED;
+            } else {
+                parsed.put("note", "PDF 已保存，但未能抽出有效文本（可能是扫描件）");
+            }
         } else {
-            parsed.put("note", "二进制简历已保存，结构化解析将在后续任务接入");
+            parsed.put("note", "doc/docx 已保存，结构化解析后续接入；建议先用 txt 或 PDF");
         }
 
         Resume resume = Resume.builder()
@@ -271,7 +281,22 @@ public class ResumeService {
                 return truncate(s, 40_000);
             }
         }
-        throw new IllegalArgumentException("当前简历无可分析文本，请上传 txt 或等待 PDF 解析接入");
+        throw new IllegalArgumentException("当前简历无可分析文本，请上传 txt/PDF，或确认 PDF 非扫描件");
+    }
+
+    /** PDFBox 3.x：Loader.loadPDF；失败返回 null，不阻断上传。 */
+    private static String extractPdfText(Path pdfPath) {
+        try (var doc = org.apache.pdfbox.Loader.loadPDF(pdfPath.toFile())) {
+            var stripper = new org.apache.pdfbox.text.PDFTextStripper();
+            String text = stripper.getText(doc);
+            if (text == null) {
+                return null;
+            }
+            return text.replace('\u0000', ' ').trim();
+        } catch (Exception e) {
+            log.warn("PDF text extract failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static Resume.ResumeType parseType(String type) {

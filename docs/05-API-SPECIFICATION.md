@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-19 | v1.8 | PDF 抽文本；创建岗位校验黑名单；打招呼优先默认模板；Boot→4.1.2 | orjrs |
 | 2026-11-06 | v1.7 | Sprint5：统计 today/trend/funnel/weekly-report；模板与黑名单 CRUD | orjrs |
 | 2026-10-26 | v1.6 | Sprint4：沟通对话 CRUD + AI 推荐回复；投递创建/看板/改状态 | orjrs |
 | 2026-10-26 | v1.5 | 简历 AI 分析/重写同步 API（`/resumes/{id}/analyze|rewrite`） | orjrs |
@@ -18,6 +19,13 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] PDF 解析 + 黑名单/模板落地（2026-11-19）
+
+- **变更原因**：补齐半成品：PDF 简历可抽文本做 AI；黑名单真正拦截建岗；默认模板优先于 AI 打招呼。
+- **包含代码**：`pdfbox:3.0.8`、`ResumeService` PDF 抽取；`JobService#matchBlacklist` / `fillTemplate`；Boot `4.1.1→4.1.2`。
+- **约定**：扫描件 PDF 可能抽不出字仍 `UPLOADED`；建岗命中黑名单 → 400；`POST /jobs/{id}/greet` 响应增 `source=TEMPLATE|AI`。
+- **技术选型**：不升 Nuxt 4 / Boot 4.2 RC（破坏面大）；PDF 选 PDFBox 3.0.8 而非 2.x。
 
 ## [变更] 统计 / 模板 / 黑名单（2026-11-06）
 

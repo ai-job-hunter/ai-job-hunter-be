@@ -16,6 +16,8 @@ public interface GreetingTemplateRepository extends JpaRepository<GreetingTempla
 
     Optional<GreetingTemplate> findByIdAndUserId(String id, String userId);
 
+    Optional<GreetingTemplate> findFirstByUserIdAndIsDefaultTrueAndIsActiveTrue(String userId);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("update GreetingTemplate t set t.isDefault = false where t.userId = :userId and t.isDefault = true")
     void clearDefaultForUser(@Param("userId") String userId);

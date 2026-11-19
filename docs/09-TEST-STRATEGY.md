@@ -8,6 +8,8 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-19 | v1.11 | 本地回归：JobLiveIT 001～009 + FE E2E 全套通过；黑名单/模板单测 | orjrs |
+| 2026-11-19 | v1.10 | JobService 接入黑名单/模板；PDFBox；Boot 4.1.2 | orjrs |
 | 2026-11-06 | v1.9 | StatsLiveIT；ApiFlowIT FLOW-007；FE stats E2E | orjrs |
 | 2026-10-26 | v1.8 | ConversationLiveIT + ApiFlowIT FLOW-006；FE conversations E2E | orjrs |
 | 2026-10-26 | v1.7 | ResumeLiveIT 增 RES-006/007 分析与重写 | orjrs |
@@ -68,7 +70,7 @@
 | AUTH-006 | `AuthApiLiveIT#auth006_*` | 无效/过期 Bearer → 受保护路径 4xx |
 | USER-001～003 | `UsersMeLiveIT` | GET/PUT `/users/me`；无 Token → 4xx |
 | RES-001～007 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、分析、重写、删除 |
-| JOB-001～007 | `JobLiveIT` | 粘贴 JD、列表、详情、分析、匹配、打招呼、删除（LLM 失败可降级） |
+| JOB-001～009 | `JobLiveIT` | 粘贴 JD…打招呼/删除；JOB-008 黑名单拦截；JOB-009 默认模板打招呼 |
 | CHAT-001～006 / APP-001～003 | `ConversationLiveIT` | 创建对话、消息、推荐回复、投递、看板、改状态 |
 | STAT-001～004 / TPL-001 / BL-001 | `StatsLiveIT` | 今日/漏斗/趋势/周报；模板与黑名单 CRUD |
 | UNIT-JWT / UNIT-JOB | `JwtTokenProviderTest`、`JobServiceTest` | CI unit job 必跑，不依赖 Docker |
@@ -103,6 +105,12 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e
 - `*LiveIT`：后端未起则整类 **跳过**（不拉 Docker）。
 - Playwright：`e2e/auth.spec.ts` + `e2e/jobs.spec.ts` + `e2e/conversations.spec.ts`（沟通/看板）。
 - CI smoke：`ApiFlowIT` 在 Actions 内起容器，验证契约，不代替本地浏览器 E2E。
+
+## [变更] Sprint6 本地回归收口（2026-11-19）
+
+- **变更原因**：PDF/黑名单/模板落地后补门禁并跑通本地全套。
+- **结果**：`JobLiveIT` 001～009；`JobServiceTest` 含黑名单/模板；FE `auth/jobs/conversations/resume-ai/stats` E2E 全过。
+- **未做**：正式测试报告归档、性能压测、安全专项、Nuxt 4 升级。
 
 ## [变更] Sprint4 沟通与投递测试（2026-10-26）
 

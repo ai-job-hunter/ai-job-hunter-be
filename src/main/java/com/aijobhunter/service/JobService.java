@@ -6,10 +6,14 @@ import com.aijobhunter.agent.MatchAgent;
 import com.aijobhunter.agent.model.GreetResult;
 import com.aijobhunter.agent.model.JdAnalysisResult;
 import com.aijobhunter.agent.model.MatchResult;
+import com.aijobhunter.domain.blacklist.Blacklist;
+import com.aijobhunter.domain.blacklist.BlacklistRepository;
 import com.aijobhunter.domain.job.Job;
 import com.aijobhunter.domain.job.JobRepository;
 import com.aijobhunter.domain.resume.Resume;
 import com.aijobhunter.domain.resume.ResumeRepository;
+import com.aijobhunter.domain.template.GreetingTemplate;
+import com.aijobhunter.domain.template.GreetingTemplateRepository;
 import com.aijobhunter.domain.user.User;
 import com.aijobhunter.dto.CreateJobRequest;
 import com.aijobhunter.dto.JobDTO;
@@ -34,6 +38,8 @@ public class JobService {
 
     private final JobRepository jobRepository;
     private final ResumeRepository resumeRepository;
+    private final BlacklistRepository blacklistRepository;
+    private final GreetingTemplateRepository greetingTemplateRepository;
     private final JdAnalyzerAgent jdAnalyzerAgent;
     private final MatchAgent matchAgent;
     private final GreetAgent greetAgent;
@@ -48,13 +54,18 @@ public class JobService {
         if (title == null) {
             title = guessTitle(request.getRawDescription());
         }
+        String company = blankToNull(request.getCompanyName());
+        String hit = matchBlacklist(userId, title, company, request.getRawDescription());
+        if (hit != null) {
+            throw new IllegalArgumentException("命中黑名单「" + hit + "」，未创建岗位");
+        }
 
         Job job = Job.builder()
                 .userId(userId)
                 .source("MANUAL")
                 .sourceUrl(blankToNull(request.getSourceUrl()))
                 .title(title)
-                .companyName(blankToNull(request.getCompanyName()))
+                .companyName(company)
                 .city(blankToNull(request.getCity()))
                 .salaryText(blankToNull(request.getSalaryText()))
                 .rawDescription(request.getRawDescription().trim())
@@ -166,19 +177,43 @@ public class JobService {
             years = guessYears(resume);
         }
 
-        GreetResult result;
-        try {
-            result = greetAgent.generate(
-                    candidateName, skills, highlights, years,
-                    job.getTitle(), job.getCompanyName() != null ? job.getCompanyName() : "",
-                    jd, style).getData();
-        } catch (AgentException e) {
-            log.warn("GreetAgent failed, degrade: {}", e.getMessage());
-            result = greetAgent.degradeGenerate(candidateName, job.getTitle(),
-                    job.getCompanyName() != null ? job.getCompanyName() : "");
+        // 优先套用用户默认打招呼模板；无模板再走 AI
+        GreetingTemplate tpl = greetingTemplateRepository
+                .findFirstByUserIdAndIsDefaultTrueAndIsActiveTrue(userId)
+                .orElse(null);
+        String greetingText;
+        String source;
+        Integer length;
+        String outStyle = style;
+        List<String> highlighted = List.of();
+
+        if (tpl != null && tpl.getContent() != null && !tpl.getContent().isBlank()) {
+            greetingText = fillTemplate(tpl.getContent(), job, skills, candidateName);
+            source = "TEMPLATE";
+            length = greetingText.length();
+            outStyle = "template:" + tpl.getName();
+            tpl.setUseCount((tpl.getUseCount() == null ? 0 : tpl.getUseCount()) + 1);
+            greetingTemplateRepository.save(tpl);
+        } else {
+            GreetResult result;
+            try {
+                result = greetAgent.generate(
+                        candidateName, skills, highlights, years,
+                        job.getTitle(), job.getCompanyName() != null ? job.getCompanyName() : "",
+                        jd, style).getData();
+            } catch (AgentException e) {
+                log.warn("GreetAgent failed, degrade: {}", e.getMessage());
+                result = greetAgent.degradeGenerate(candidateName, job.getTitle(),
+                        job.getCompanyName() != null ? job.getCompanyName() : "");
+            }
+            greetingText = result.getGreetingText();
+            source = "AI";
+            length = result.getLength();
+            outStyle = result.getStyle();
+            highlighted = result.getHighlightedPoints() == null ? List.of() : result.getHighlightedPoints();
         }
 
-        job.setGreetingText(result.getGreetingText());
+        job.setGreetingText(greetingText);
         if (job.getStatus() == Job.JobStatus.NEW || job.getStatus() == Job.JobStatus.ANALYZED) {
             job.setStatus(Job.JobStatus.GREETED);
         }
@@ -186,11 +221,52 @@ public class JobService {
 
         Map<String, Object> data = new HashMap<>();
         data.put("jobId", job.getId());
-        data.put("greetingText", result.getGreetingText());
-        data.put("length", result.getLength());
-        data.put("style", result.getStyle());
-        data.put("highlightedPoints", result.getHighlightedPoints());
+        data.put("greetingText", greetingText);
+        data.put("length", length);
+        data.put("style", outStyle);
+        data.put("source", source);
+        data.put("highlightedPoints", highlighted);
         return data;
+    }
+
+    /** 返回命中的黑名单原文；未命中返回 null。 */
+    private String matchBlacklist(String userId, String title, String company, String jd) {
+        List<Blacklist> items = blacklistRepository.findByUserIdOrderByAddedAtDesc(userId);
+        if (items.isEmpty()) {
+            return null;
+        }
+        String t = title == null ? "" : title.toLowerCase(Locale.ROOT);
+        String c = company == null ? "" : company.toLowerCase(Locale.ROOT);
+        String body = jd == null ? "" : jd.toLowerCase(Locale.ROOT);
+        for (Blacklist item : items) {
+            if (item.getValue() == null || item.getValue().isBlank()) {
+                continue;
+            }
+            if (item.getExpiresAt() != null && item.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+                continue;
+            }
+            String v = item.getValue().trim().toLowerCase(Locale.ROOT);
+            boolean hit = switch (item.getType()) {
+                case COMPANY -> !c.isEmpty() && c.contains(v);
+                case JOB_TITLE -> !t.isEmpty() && t.contains(v);
+                case HR -> false; // 岗位创建时无 HR 字段
+                default -> body.contains(v) || t.contains(v) || c.contains(v);
+            };
+            if (hit) {
+                return item.getValue().trim();
+            }
+        }
+        return null;
+    }
+
+    private static String fillTemplate(String content, Job job, List<String> skills, String candidateName) {
+        String skillsText = skills == null || skills.isEmpty() ? "" : String.join("、", skills);
+        return content
+                .replace("{{job_title}}", job.getTitle() == null ? "" : job.getTitle())
+                .replace("{{company_name}}", job.getCompanyName() == null ? "" : job.getCompanyName())
+                .replace("{{skills}}", skillsText)
+                .replace("{{salary}}", job.getSalaryText() == null ? "" : job.getSalaryText())
+                .replace("{{candidate_name}}", candidateName == null ? "" : candidateName);
     }
 
     private Job runAnalyze(Job job) {

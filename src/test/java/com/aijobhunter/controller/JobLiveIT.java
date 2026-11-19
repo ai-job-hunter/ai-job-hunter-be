@@ -162,10 +162,69 @@ class JobLiveIT {
         assertThat(res.statusCode()).isEqualTo(200);
         assertThat(code(res.body())).isEqualTo(0);
         assertThat(res.body()).contains("greetingText");
+        assertThat(res.body()).containsAnyOf("\"source\":\"AI\"", "\"source\":\"TEMPLATE\"");
     }
 
     @Test
     @Order(7)
+    @DisplayName("JOB-008 黑名单公司拦截创建岗位")
+    void blacklistBlocksCreate() throws Exception {
+        HttpResponse<String> bl = postAuth("/api/v1/blacklist", """
+                {"type":"COMPANY","value":"黑名单科技","reason":"LiveIT"}
+                """);
+        assertThat(bl.statusCode()).isEqualTo(200);
+        assertThat(code(bl.body())).isEqualTo(0);
+
+        HttpResponse<String> blocked = postAuth("/api/v1/jobs", """
+                {
+                  "title":"被拦岗位",
+                  "companyName":"黑名单科技",
+                  "rawDescription":"不应创建成功",
+                  "analyze":false
+                }
+                """);
+        assertThat(blocked.statusCode()).isEqualTo(400);
+        assertThat(blocked.body()).contains("黑名单");
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("JOB-009 默认模板优先生成打招呼")
+    void greetUsesDefaultTemplate() throws Exception {
+        HttpResponse<String> tpl = postAuth("/api/v1/templates", """
+                {
+                  "name":"LiveIT默认",
+                  "content":"您好，我对{{company_name}}的{{job_title}}很感兴趣。",
+                  "isDefault":true
+                }
+                """);
+        assertThat(tpl.statusCode()).isEqualTo(200);
+        assertThat(code(tpl.body())).isEqualTo(0);
+
+        HttpResponse<String> job = postAuth("/api/v1/jobs", """
+                {
+                  "title":"模板测试岗",
+                  "companyName":"模板公司",
+                  "rawDescription":"Java 后端",
+                  "analyze":false
+                }
+                """);
+        assertThat(job.statusCode()).isEqualTo(200);
+        String tplJobId = firstId(job.body());
+        assertThat(tplJobId).isNotBlank();
+
+        HttpResponse<String> res = postAuth("/api/v1/jobs/" + tplJobId + "/greet", """
+                {"resumeId":"%s","style":"friendly"}
+                """.formatted(resumeId));
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("\"source\":\"TEMPLATE\"");
+        assertThat(res.body()).contains("模板公司");
+        assertThat(res.body()).contains("模板测试岗");
+    }
+
+    @Test
+    @Order(9)
     @DisplayName("JOB-007 删除岗位")
     void deleteJob() throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + "/api/v1/jobs/" + jobId))
