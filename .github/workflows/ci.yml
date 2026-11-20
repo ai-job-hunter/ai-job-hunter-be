@@ -96,7 +96,8 @@ jobs:
         run: |
           ./gradlew test --no-daemon \
             --tests 'com.aijobhunter.common.security.JwtTokenProviderTest' \
-            --tests 'com.aijobhunter.service.JobServiceTest'
+            --tests 'com.aijobhunter.service.JobServiceTest' \
+            --tests 'com.aijobhunter.service.ResumeWordExtractTest'
 
       - name: Upload test results
         if: always()

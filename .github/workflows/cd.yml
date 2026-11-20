@@ -233,10 +233,10 @@ jobs:
             echo "=== Restart container ==="
             IMAGE_TAG=$DEPLOY_TAG docker compose -f ${{ env.COMPOSE_FILE }} up -d --remove-orphans ${{ env.COMPOSE_SERVICES }}
 
-            # ── 5. 健康检查（最多 90 秒）────────────────────────────
+            # ── 5. 健康检查（最多约 3 分钟；对齐 start_period=90s + 慢启动）──
             echo "=== Health check ==="
             HEALTHY=false
-            for i in $(seq 1 18); do
+            for i in $(seq 1 36); do
               sleep 5
               STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER_NAME" 2>/dev/null || echo "unknown")
               RUNNING=$(docker inspect --format='{{.State.Running}}' "$CONTAINER_NAME" 2>/dev/null || echo "false")
@@ -249,11 +249,19 @@ jobs:
                 echo "  container stopped, exit early"
                 break
               fi
+              if [ "$STATUS" = "unhealthy" ]; then
+                echo "  container reported unhealthy, exit early"
+                break
+              fi
             done
 
             # ── 6. 失败则用部署前本地镜像 ID 回滚 ───────────────────
             if [ "$HEALTHY" != "true" ]; then
               echo "=== ⚠️  HEALTH CHECK FAILED for $DEPLOY_TAG ==="
+              echo "=== docker logs (tail 120) ==="
+              docker logs --tail 120 "$CONTAINER_NAME" 2>&1 || true
+              echo "=== docker inspect Health ==="
+              docker inspect --format='{{json .State.Health}}' "$CONTAINER_NAME" 2>&1 || true
               if [ -n "$PREV_IMAGE_ID" ]; then
                 ROLLBACK_REF="ghcr.io/${{ env.IMAGE_NAMESPACE }}/${{ env.IMAGE_PROJECT }}:rollback-local"
                 echo "=== Rolling back to previous image $PREV_IMAGE_ID ==="

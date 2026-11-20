@@ -104,8 +104,16 @@ public class ResumeService {
             } else {
                 parsed.put("note", "PDF 已保存，但未能抽出有效文本（可能是扫描件）");
             }
-        } else {
-            parsed.put("note", "doc/docx 已保存，结构化解析后续接入；建议先用 txt 或 PDF");
+        } else if ("docx".equals(ext) || "doc".equals(ext)) {
+            String text = extractWordText(target, ext);
+            if (text != null && !text.isBlank()) {
+                parsed.put("rawText", truncate(text, 50_000));
+                parsed.put("summary", truncate(text, 500));
+                parsed.put("parser", "docx".equals(ext) ? "poi-ooxml-5.4.1" : "poi-hwpf-5.4.1");
+                status = Resume.ResumeStatus.PARSED;
+            } else {
+                parsed.put("note", "Word 已保存，但未能抽出有效文本（文件可能损坏或为空）");
+            }
         }
 
         Resume resume = Resume.builder()
@@ -281,7 +289,7 @@ public class ResumeService {
                 return truncate(s, 40_000);
             }
         }
-        throw new IllegalArgumentException("当前简历无可分析文本，请上传 txt/PDF，或确认 PDF 非扫描件");
+        throw new IllegalArgumentException("当前简历无可分析文本，请上传 txt/PDF/Word，或确认文件非扫描件/空文档");
     }
 
     /** PDFBox 3.x：Loader.loadPDF；失败返回 null，不阻断上传。 */
@@ -297,6 +305,38 @@ public class ResumeService {
             log.warn("PDF text extract failed: {}", e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * Word 文本抽取：docx 用 XWPF；旧版 .doc 用 HWPF。
+     * 失败返回 null，不阻断上传。
+     */
+    static String extractWordText(Path wordPath, String ext) {
+        try {
+            if ("docx".equals(ext)) {
+                try (var in = Files.newInputStream(wordPath);
+                     var doc = new org.apache.poi.xwpf.usermodel.XWPFDocument(in);
+                     var extractor = new org.apache.poi.xwpf.extractor.XWPFWordExtractor(doc)) {
+                    return cleanExtractedText(extractor.getText());
+                }
+            }
+            try (var in = Files.newInputStream(wordPath);
+                 var doc = new org.apache.poi.hwpf.HWPFDocument(in);
+                 var extractor = new org.apache.poi.hwpf.extractor.WordExtractor(doc)) {
+                return cleanExtractedText(extractor.getText());
+            }
+        } catch (Exception e) {
+            log.warn("Word text extract failed ({}): {}", ext, e.getMessage());
+            return null;
+        }
+    }
+
+    private static String cleanExtractedText(String text) {
+        if (text == null) {
+            return null;
+        }
+        String cleaned = text.replace('\u0000', ' ').trim();
+        return cleaned.isEmpty() ? null : cleaned;
     }
 
     private static Resume.ResumeType parseType(String type) {

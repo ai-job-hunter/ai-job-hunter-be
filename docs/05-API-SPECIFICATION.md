@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-20 | v1.9 | Word(doc/docx) 抽文本；上传后可 PARSED 供 AI 分析 | orjrs |
 | 2026-11-19 | v1.8 | PDF 抽文本；创建岗位校验黑名单；打招呼优先默认模板；Boot→4.1.2 | orjrs |
 | 2026-11-06 | v1.7 | Sprint5：统计 today/trend/funnel/weekly-report；模板与黑名单 CRUD | orjrs |
 | 2026-10-26 | v1.6 | Sprint4：沟通对话 CRUD + AI 推荐回复；投递创建/看板/改状态 | orjrs |
@@ -19,6 +20,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] Word 简历抽文本（2026-11-20）
+
+- **变更原因**：V1 半成品：doc/docx 此前只落盘不可分析。
+- **包含代码**：`poi-ooxml`/`poi-scratchpad` 5.4.1；`ResumeService#extractWordText`；`ResumeWordExtractTest`。
+- **约定**：抽出有效文本 → `status=PARSED` + `parsedData.rawText`；抽不出字仍 `UPLOADED` 并写 `note`；分析/重写错误提示改为支持 Word。
 
 ## [变更] PDF 解析 + 黑名单/模板落地（2026-11-19）
 
@@ -44,7 +51,7 @@
 
 - **变更原因**：补齐 Sprint2 Resume Agent；详情页可分析优劣并生成优化建议。
 - **包含代码**：`ResumeService#analyze/rewrite`、`ResumeController`；复用 `ResumeAgent` / `ResumeRewriteAgent`。
-- **约定**：同步返回完整简历；`status=ANALYZED`；重写结果写入 `analysis.rewrite`（不覆盖原文）；LLM 失败降级仍 200；无 `rawText` 的 PDF 暂不可分析。
+- **约定**：同步返回完整简历；`status=ANALYZED`；重写结果写入 `analysis.rewrite`（不覆盖原文）；LLM 失败降级仍 200；无 `rawText` 时不可分析（请用可抽字的 txt/PDF/Word）。
 
 ## [变更] 岗位粘贴 JD + AI 分析/匹配/打招呼（2026-10-17）
 
@@ -63,7 +70,7 @@
 
 - **变更原因**：Sprint 2 推进：认证之后补用户资料与简历管理。
 - **包含代码**：`UserController`、`ResumeController`/`ResumeService`、实体 `Resume`；前端 `/profile`、`/resumes`。
-- **说明**：txt 上传后 `status=PARSED` 并写入 `parsedData.rawText`；pdf/doc/docx 先落盘 `UPLOADED`，结构化解析后续接 Resume Agent。
+- **说明**：txt/PDF/doc/docx 能抽出文本则 `status=PARSED` 并写入 `parsedData.rawText`；抽不出字（如扫描件）仍 `UPLOADED`。
 
 ## [变更] 登录支持用户名或邮箱（2026-10-12）
 

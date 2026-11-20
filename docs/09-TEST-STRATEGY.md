@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-20 | v1.12 | Word 抽文本单测 ResumeWordExtractTest；部署健康检查修复 | orjrs |
 | 2026-11-19 | v1.11 | 本地回归：JobLiveIT 001～009 + FE E2E 全套通过；黑名单/模板单测 | orjrs |
 | 2026-11-19 | v1.10 | JobService 接入黑名单/模板；PDFBox；Boot 4.1.2 | orjrs |
 | 2026-11-06 | v1.9 | StatsLiveIT；ApiFlowIT FLOW-007；FE stats E2E | orjrs |
@@ -20,6 +21,12 @@
 | 2026-10-14 | v1.2 | 落地 AUTH Live API 测试；约定「功能完成 → 写测 → 通过再下一任务」 | orjrs |
 | 2026-09-23 | v1.1 | 同步 Testcontainers 2.0.5 集成测试方案（见 §2.2.2、§4.2） | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
+
+## [变更] Word 抽文本单测（2026-11-20）
+
+- **变更原因**：doc/docx 解析落地后补门禁。
+- **包含代码**：`ResumeWordExtractTest`（内存生成 docx → `extractWordText`）；损坏文件返回 null。
+- **约定**：与 PDF 一样，抽不出字不阻断上传，分析阶段再报「无可分析文本」。
 
 ## [变更] 功能完成必须测通再继续（2026-10-14）
 
@@ -73,13 +80,13 @@
 | JOB-001～009 | `JobLiveIT` | 粘贴 JD…打招呼/删除；JOB-008 黑名单拦截；JOB-009 默认模板打招呼 |
 | CHAT-001～006 / APP-001～003 | `ConversationLiveIT` | 创建对话、消息、推荐回复、投递、看板、改状态 |
 | STAT-001～004 / TPL-001 / BL-001 | `StatsLiveIT` | 今日/漏斗/趋势/周报；模板与黑名单 CRUD |
-| UNIT-JWT / UNIT-JOB | `JwtTokenProviderTest`、`JobServiceTest` | CI unit job 必跑，不依赖 Docker |
+| UNIT-JWT / UNIT-JOB / UNIT-WORD | `JwtTokenProviderTest`、`JobServiceTest`、`ResumeWordExtractTest` | CI unit job 必跑，不依赖 Docker |
 | FLOW-001～007 | `ApiFlowIT` | CI smoke：…→投递看板→统计漏斗/模板/黑名单 |
 
 ## [变更] CI 真绿 + 功能打通门禁（2026-10-18）
 
 - **变更原因**：原先 smoke 未设 `RUN_TESTCONTAINERS`，`ContextLoadsTest` 被跳过仍显示成功；unit job 几乎无断言。
-- **BE CI**：unit → Jwt/JobService；smoke → `RUN_TESTCONTAINERS=true` 跑 ContextLoads + **ApiFlowIT**（真实 PG/Redis）。
+- **BE CI**：unit → Jwt/JobService/ResumeWordExtract；smoke → `RUN_TESTCONTAINERS=true` 跑 ContextLoads + **ApiFlowIT**（真实 PG/Redis）。
 - **FE CI**：新增 `ci.yml` 做 `npm run generate`；Playwright 本地强制；可选 Variables `E2E_WITH_BACKEND=true`。
 - **本地打通**：每个功能仍须 `*LiveIT`（IDEA 启 BE）+ `npm run test:e2e`（含 `e2e/jobs.spec.ts`）。
 
@@ -89,7 +96,8 @@
 # 0) CI 同款单元测试（无需后端）
 cd ai-job-hunter-be
 ./gradlew test --tests com.aijobhunter.common.security.JwtTokenProviderTest \
-  --tests com.aijobhunter.service.JobServiceTest
+  --tests com.aijobhunter.service.JobServiceTest \
+  --tests com.aijobhunter.service.ResumeWordExtractTest
 
 # 1) API Live（后端仓，IDEA/本机已启 BE）
 LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.controller.AuthApiLiveIT

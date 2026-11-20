@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-11-20 | v1.12 | BE 健康检查改 wget；镜像装 curl 兼容旧 compose；CD 等 3 分钟并打日志 | orjrs |
 | 2026-10-14 | v1.11 | 每个 compose 服务补 cpus；同机多项目防 CPU 打满 | orjrs |
 | 2026-10-14 | v1.10 | 每个 compose 服务都写 mem_limit（fe/be/agent）；skill 模板同步 | orjrs |
 | 2026-10-14 | v1.9 | JVM 参数只留 Dockerfile；compose 仅 mem_limit | orjrs |
@@ -18,6 +19,22 @@
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
 | 2026-10-18 | v1.4 | CI smoke 强制 RUN_TESTCONTAINERS + ApiFlowIT；unit 拆 Jwt/JobService | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
+
+## [变更] BE 健康检查 curl→wget（2026-11-20）
+
+- **变更原因**：`eclipse-temurin:21-jre-alpine` 无 curl；compose 用 `curl -f` → Docker 状态一直 `starting`，CD 90 秒超时失败并回滚。
+- **包含代码**：`docker-compose.yml`（be/fe）healthcheck 改 `wget`；`Dockerfile` 额外 `apk add curl` 兼容旧服务器 compose；`cd.yml` 等待约 3 分钟，失败输出 `docker logs` + Health inspect。
+- **服务器须人工**（CD 不覆盖 compose）：
+
+```bash
+cd /opt/project/ai-job-hunter
+# 把 ai-job-hunter-be.healthcheck.test 从 curl 改成：
+# ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health"]
+# start_period 建议 90s；interval 建议 15s
+sudo docker compose up -d --force-recreate ai-job-hunter-be
+```
+
+> 新镜像已内置 curl，即使暂时不改服务器 compose，健康检查也应能通过；仍建议改成 wget 与仓库一致。
 
 ## [变更] CI 测试真执行（2026-10-18）
 
@@ -307,6 +324,8 @@ docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep ai-job-hun
 - 查看 GHCR 是否有新镜像：`docker images | grep ai-job-hunter-be`
 - SSH 进去看日志：`docker logs ai-job-hunter-be --tail 100`
 - 看健康详情：`docker inspect ai-job-hunter-be --format '{{json .State.Health}}'`
+
+**若 Health Log 含 `curl: not found` / exit 127**：服务器 compose 仍用 curl，而旧镜像无 curl。处理：① 拉含 curl 的新镜像；或 ② 把 healthcheck 改成 `wget -qO-`（见上文 v1.12）。
 
 **若 Log 里是 `HTTP/1.1 403`**：旧镜像未放行 `/actuator/health`（v1.4 已修）。v1.7 起构建即推 `:latest`，服务器拉 latest 即可吃到修复。
 

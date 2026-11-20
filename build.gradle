@@ -59,6 +59,10 @@ dependencies {
 
     // 简历 PDF 文本抽取（3.0.x 最新稳定；API 用 Loader.loadPDF）
     implementation 'org.apache.pdfbox:pdfbox:3.0.8'
+
+    // 简历 Word 文本抽取：docx=poi-ooxml；旧版 .doc=poi-scratchpad(HWPF)
+    implementation 'org.apache.poi:poi-ooxml:5.4.1'
+    implementation 'org.apache.poi:poi-scratchpad:5.4.1'
     
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

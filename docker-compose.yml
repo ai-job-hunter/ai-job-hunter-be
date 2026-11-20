@@ -83,12 +83,13 @@ services:
       REDIS_DB:       ${REDIS_DB:-0}
     expose:
       - "8080"
+    # Alpine JRE 只有 BusyBox wget，没有 curl；用 curl 会一直 starting/unhealthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/actuator/health"]
-      interval: 30s
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/actuator/health"]
+      interval: 15s
       timeout: 5s
-      retries: 3
-      start_period: 60s
+      retries: 4
+      start_period: 90s
     networks:
       - proxy
       - db-net
