@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-11-23 | v1.13 | prod 弱 JWT 启动失败；Agent 接口须登录（与 compose 无直接关系） | orjrs |
 | 2026-11-20 | v1.12 | BE 健康检查改 wget；镜像装 curl 兼容旧 compose；CD 等 3 分钟并打日志 | orjrs |
 | 2026-10-14 | v1.11 | 每个 compose 服务补 cpus；同机多项目防 CPU 打满 | orjrs |
 | 2026-10-14 | v1.10 | 每个 compose 服务都写 mem_limit（fe/be/agent）；skill 模板同步 | orjrs |
@@ -19,6 +20,12 @@
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
 | 2026-10-18 | v1.4 | CI smoke 强制 RUN_TESTCONTAINERS + ApiFlowIT；unit 拆 Jwt/JobService | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
+
+## [变更] 生产 JWT 与 Agent 鉴权（2026-11-23）
+
+- **变更原因**：误用默认 JWT / 匿名调 Agent 有风险。
+- **包含代码**：`ProdSecretValidator`；`SecurityConfig`。
+- **运维注意**：compose 已设 `SPRING_PROFILES_ACTIVE=prod` 时，服务器 `.env` 的 `JWT_SECRET` 必须是 ≥32 字符随机串，否则容器起不来（健康检查失败）。
 
 ## [变更] BE 健康检查 curl→wget（2026-11-20）
 

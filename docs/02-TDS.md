@@ -8,12 +8,23 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-23 | v1.5 | Agent/Swagger 须登录；prod 拒绝弱 JWT；Sprint6 报告 | orjrs |
 | 2026-10-17 | v1.4 | Sprint3：岗位粘贴 JD + Spring AI；明确 V1 不建 Python Agent / 不爬 BOSS | orjrs |
 | 2026-10-11 | v1.3 | Security 放行 `/actuator/health`；禁用默认 inMemory user；Dockerfile 健康检查用 127.0.0.1 | orjrs |
 | 2026-09-22 | v1.2 | 升级 Spring Boot 3 → 4.1.1（Jackson 2 → 3），修复 Agent 构造器注入歧义，新增 Testcontainers 冒烟测试（真实 PostgreSQL + Redis） | - |
 | 2026-09-06 | v1.1 | 架构调整：移除 Python BOSS Agent，Java 后端集成 Spring AI，V1 聚焦纯 AI 辅助能力 | - |
 
 ---
+
+## [变更] Agent 接口鉴权 + 生产 JWT 校验（2026-11-23）
+
+**变更原因**：`/api/v1/agent/**` 与 Swagger 原 `permitAll`，未登录即可烧 DeepSeek 额度；生产误用默认 JWT 可伪造登录。
+
+**包含代码**：`SecurityConfig`；`ProdSecretValidator`（仅 `prod` profile）。
+
+**变更前 → 变更后**：
+- ~~`/api/v1/agent/**`、Swagger 匿名~~ → 须 JWT（业务仍走 `/api/v1/jobs|resumes|…`）
+- prod 下弱/占位 `JWT_SECRET` → **启动失败**
 
 ## [变更] 岗位数据走粘贴 JD（2026-10-17）
 

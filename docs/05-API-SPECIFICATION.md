@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-23 | v1.10 | `/api/v1/agent/**` 与 Swagger 须登录；匿名仅 health/auth | orjrs |
 | 2026-11-20 | v1.9 | Word(doc/docx) 抽文本；上传后可 PARSED 供 AI 分析 | orjrs |
 | 2026-11-19 | v1.8 | PDF 抽文本；创建岗位校验黑名单；打招呼优先默认模板；Boot→4.1.2 | orjrs |
 | 2026-11-06 | v1.7 | Sprint5：统计 today/trend/funnel/weekly-report；模板与黑名单 CRUD | orjrs |
@@ -20,6 +21,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] Agent 直连接口须登录（2026-11-23）
+
+- **变更原因**：安全抽查发现匿名可调 LLM Agent，浪费额度。
+- **包含代码**：`SecurityConfig` 去掉 `/api/v1/agent/**`、Swagger 的 `permitAll`。
+- **约定**：前端/业务应继续用 `/api/v1/jobs|resumes|conversations|stats`；调试 Agent 时带 JWT。匿名仅 `/api/v1/auth/**` 与 `/actuator/health|info`。
 
 ## [变更] Word 简历抽文本（2026-11-20）
 
