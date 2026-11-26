@@ -8,7 +8,14 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.1 | 落地 `application_timelines`（JPA ddl-auto）；事件含 SUBMITTED/STATUS_CHANGED/NOTE | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
+
+## [变更] 投递时间线表落地（2026-11-26）
+
+- **变更原因**：看板需要可持久化的备注与状态变更记录。
+- **包含代码**：实体 `ApplicationTimeline`；仓库；Hibernate `ddl-auto=update` 建表。
+- **实现相对草案**：暂不存 `metadata` JSONB（够用再加）；`event_type` 常用：`APPLICATION_SUBMITTED` / `STATUS_CHANGED` / `NOTE`。
 
 ---
 

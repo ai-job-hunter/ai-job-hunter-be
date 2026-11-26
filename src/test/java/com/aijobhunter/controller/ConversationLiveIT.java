@@ -228,11 +228,36 @@ class ConversationLiveIT {
         HttpResponse<String> res = putAuth(
                 "/api/v1/applications/" + applicationId + "/status",
                 """
-                {"status":"INTERVIEWING"}
+                {"status":"INTERVIEWING","note":"约了一面"}
                 """);
         assertThat(res.statusCode()).isEqualTo(200);
         assertThat(code(res.body())).isEqualTo(0);
         assertThat(res.body()).contains("INTERVIEWING");
+        assertThat(res.body()).contains("STATUS_CHANGED");
+        assertThat(res.body()).contains("约了一面");
+    }
+
+    @Test
+    @Order(10)
+    @DisplayName("APP-004 投递时间线备注")
+    void addApplicationNote() throws Exception {
+        HttpResponse<String> res = postAuth(
+                "/api/v1/applications/" + applicationId + "/notes",
+                """
+                {"note":"HR 说下周出结果"}
+                """);
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("NOTE");
+        assertThat(res.body()).contains("HR 说下周出结果");
+        assertThat(res.body()).contains("timeline");
+
+        HttpResponse<String> detail = getAuth("/api/v1/applications/" + applicationId);
+        assertThat(detail.statusCode()).isEqualTo(200);
+        assertThat(code(detail.body())).isEqualTo(0);
+        assertThat(detail.body()).contains("APPLICATION_SUBMITTED");
+        assertThat(detail.body()).contains("STATUS_CHANGED");
+        assertThat(detail.body()).contains("HR 说下周出结果");
     }
 
     private static HttpResponse<String> postJson(String path, String json) throws Exception {

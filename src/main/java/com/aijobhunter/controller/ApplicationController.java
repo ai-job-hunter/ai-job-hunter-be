@@ -50,6 +50,12 @@ public class ApplicationController {
         return ResponseEntity.ok(ApiResponse.success(applicationService.kanban(user.getId())));
     }
 
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> get(@PathVariable String id) {
+        User user = SecurityUtils.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.success(applicationService.get(user.getId(), id)));
+    }
+
     @PutMapping("/{id}/status")
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateStatus(
             @PathVariable String id,
@@ -57,7 +63,21 @@ public class ApplicationController {
         User user = SecurityUtils.requireCurrentUser();
         return ResponseEntity.ok(ApiResponse.success(
                 "状态已更新",
-                applicationService.updateStatus(user.getId(), id, body == null ? null : body.getStatus())));
+                applicationService.updateStatus(
+                        user.getId(),
+                        id,
+                        body == null ? null : body.getStatus(),
+                        body == null ? null : body.getNote())));
+    }
+
+    @PostMapping("/{id}/notes")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> addNote(
+            @PathVariable String id,
+            @RequestBody AddNoteRequest body) {
+        User user = SecurityUtils.requireCurrentUser();
+        return ResponseEntity.ok(ApiResponse.success(
+                "备注已添加",
+                applicationService.addNote(user.getId(), id, body == null ? null : body.getNote())));
     }
 
     @Data
@@ -70,5 +90,12 @@ public class ApplicationController {
     @Data
     public static class UpdateStatusRequest {
         private String status;
+        /** 可选：随状态变更写入时间线条目 */
+        private String note;
+    }
+
+    @Data
+    public static class AddNoteRequest {
+        private String note;
     }
 }

@@ -2,6 +2,8 @@ package com.aijobhunter.service;
 
 import com.aijobhunter.domain.application.Application;
 import com.aijobhunter.domain.application.ApplicationRepository;
+import com.aijobhunter.domain.application.ApplicationTimeline;
+import com.aijobhunter.domain.application.ApplicationTimelineRepository;
 import com.aijobhunter.domain.job.Job;
 import com.aijobhunter.domain.job.JobRepository;
 import com.aijobhunter.domain.resume.Resume;
@@ -23,6 +25,7 @@ import java.util.stream.Collectors;
 public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
+    private final ApplicationTimelineRepository timelineRepository;
     private final JobRepository jobRepository;
     private final ResumeRepository resumeRepository;
 
@@ -57,6 +60,8 @@ public class ApplicationService {
                 .status(Application.ApplicationStatus.SUBMITTED)
                 .build();
         app = applicationRepository.save(app);
+        appendTimeline(app.getId(), "APPLICATION_SUBMITTED", "投递了简历",
+                note == null || note.isBlank() ? null : note.trim());
 
         if (job.getStatus() == Job.JobStatus.NEW
                 || job.getStatus() == Job.JobStatus.ANALYZED
@@ -110,16 +115,72 @@ public class ApplicationService {
     }
 
     @Transactional
-    public Map<String, Object> updateStatus(String userId, String id, String status) {
+    public Map<String, Object> updateStatus(String userId, String id, String status, String note) {
         Application app = applicationRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new IllegalArgumentException("投递记录不存在"));
+        Application.ApplicationStatus next;
         try {
-            app.setStatus(Application.ApplicationStatus.valueOf(status.trim().toUpperCase(Locale.ROOT)));
+            next = Application.ApplicationStatus.valueOf(status.trim().toUpperCase(Locale.ROOT));
         } catch (Exception e) {
             throw new IllegalArgumentException("不支持的状态: " + status);
         }
+        String prev = app.getStatus() == null ? null : app.getStatus().name();
+        app.setStatus(next);
         app = applicationRepository.save(app);
+
+        String title = "状态 → " + statusLabel(next);
+        String desc = note == null || note.isBlank()
+                ? (prev == null ? null : "从 " + statusLabel(Application.ApplicationStatus.valueOf(prev)) + " 变更")
+                : note.trim();
+        appendTimeline(app.getId(), "STATUS_CHANGED", title, desc);
         return toDtoResolved(app);
+    }
+
+    @Transactional
+    public Map<String, Object> addNote(String userId, String id, String note) {
+        if (note == null || note.isBlank()) {
+            throw new IllegalArgumentException("备注不能为空");
+        }
+        Application app = applicationRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("投递记录不存在"));
+        String text = note.trim();
+        if (text.length() > 2000) {
+            throw new IllegalArgumentException("备注过长（最多 2000 字）");
+        }
+        appendTimeline(app.getId(), "NOTE", "备注", text);
+        if (app.getApplyNote() == null || app.getApplyNote().isBlank()) {
+            app.setApplyNote(text);
+            applicationRepository.save(app);
+        }
+        return toDtoResolved(app);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> get(String userId, String id) {
+        Application app = applicationRepository.findByIdAndUserId(id, userId)
+                .orElseThrow(() -> new IllegalArgumentException("投递记录不存在"));
+        return toDtoResolved(app);
+    }
+
+    private void appendTimeline(String applicationId, String eventType, String title, String description) {
+        timelineRepository.save(ApplicationTimeline.builder()
+                .applicationId(applicationId)
+                .eventType(eventType)
+                .title(title)
+                .description(description)
+                .build());
+    }
+
+    private static String statusLabel(Application.ApplicationStatus status) {
+        return switch (status) {
+            case SUBMITTED -> "已投递";
+            case VIEWED -> "已查看";
+            case REPLIED -> "有回复";
+            case INTERVIEWING -> "面试中";
+            case OFFERED -> "Offer";
+            case REJECTED -> "已拒绝";
+            case WITHDRAWN -> "已撤回";
+        };
     }
 
     private Map<String, Object> toDtoResolved(Application app) {
@@ -139,6 +200,7 @@ public class ApplicationService {
         data.put("appliedAt", app.getAppliedAt());
         data.put("applyNote", app.getApplyNote());
         data.put("conversationId", app.getConversationId());
+        data.put("timeline", timelineDtos(app.getId()));
         if (job != null) {
             Map<String, Object> j = new LinkedHashMap<>();
             j.put("id", job.getId());
@@ -158,5 +220,19 @@ public class ApplicationService {
             data.put("resume", null);
         }
         return data;
+    }
+
+    private List<Map<String, Object>> timelineDtos(String applicationId) {
+        return timelineRepository.findByApplicationIdOrderByOccurredAtAscCreatedAtAsc(applicationId).stream()
+                .map(t -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", t.getId());
+                    m.put("eventType", t.getEventType());
+                    m.put("title", t.getTitle());
+                    m.put("description", t.getDescription());
+                    m.put("occurredAt", t.getOccurredAt());
+                    return m;
+                })
+                .collect(Collectors.toList());
     }
 }

@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.11 | 投递时间线备注：`GET /applications/{id}`、`POST …/notes`；状态变更可带 note | orjrs |
 | 2026-11-23 | v1.10 | `/api/v1/agent/**` 与 Swagger 须登录；匿名仅 health/auth | orjrs |
 | 2026-11-20 | v1.9 | Word(doc/docx) 抽文本；上传后可 PARSED 供 AI 分析 | orjrs |
 | 2026-11-19 | v1.8 | PDF 抽文本；创建岗位校验黑名单；打招呼优先默认模板；Boot→4.1.2 | orjrs |
@@ -21,6 +22,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 投递时间线备注（2026-11-26）
+
+- **变更原因**：看板只有状态、不好记面试安排等；ER 已有 `application_timelines` 草案但未落地。
+- **包含代码**：`ApplicationTimeline*`；`ApplicationService` 自动记 SUBMITTED/STATUS_CHANGED；`POST /applications/{id}/notes`；`GET /applications/{id}`；DTO 含 `timeline`。
+- **约定**：备注最长 2000 字；列表/看板项同样带 `timeline`；~~V1 暂不落 timeline note~~（2026-11-26）。
 
 ## [变更] Agent 直连接口须登录（2026-11-23）
 
@@ -1144,7 +1151,24 @@ PUT /api/v1/applications/{id}/status
 }
 ```
 
-`status` 枚举：`SUBMITTED` / `VIEWED` / `REPLIED` / `INTERVIEWING` / `OFFERED` / `REJECTED` / `WITHDRAWN`。V1 暂不落 timeline note。
+`status` 枚举：`SUBMITTED` / `VIEWED` / `REPLIED` / `INTERVIEWING` / `OFFERED` / `REJECTED` / `WITHDRAWN`。  
+可选字段 `note`：写入时间线 `STATUS_CHANGED`。
+
+## 7.5 添加投递备注
+
+```
+POST /api/v1/applications/{id}/notes
+```
+
+**请求体：**
+
+```json
+{
+  "note": "一面约周五下午"
+}
+```
+
+写入时间线 `NOTE`；若投递尚无 `applyNote`，顺带写入首条备注。列表 / 看板 / 详情的 `timeline` 字段返回事件数组（`eventType` / `title` / `description` / `occurredAt`）。
 
 ---
 
