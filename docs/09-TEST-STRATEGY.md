@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.16 | PlatformTaskLiveIT PLAT-001～004；FE platforms E2E | orjrs |
 | 2026-11-26 | v1.15 | USER-004 改密码；FE profile E2E | orjrs |
 | 2026-11-26 | v1.14 | APP-004 投递时间线备注；ConversationLiveIT 扩展 | orjrs |
 | 2026-11-23 | v1.13 | Sprint6 报告落地；安全抽查：Agent 须登录 | orjrs |
@@ -85,6 +86,7 @@
 | AUTH-005 | `AuthApiLiveIT#auth005_*` | `2001` 用户名/邮箱或密码错误 |
 | AUTH-006 | `AuthApiLiveIT#auth006_*` | 无效/过期 Bearer → 受保护路径 4xx |
 | USER-001～004 | `UsersMeLiveIT` | GET/PUT `/users/me`；改密码；无 Token → 4xx |
+| PLAT-001～004 | `PlatformTaskLiveIT` | MOCK 连接 → 任务 → 确认 DONE；BOSS 拒绝 |
 | RES-001～007 | `ResumeLiveIT` | 上传 txt、列表、详情、更新、分析、重写、删除 |
 | JOB-001～009 | `JobLiveIT` | 粘贴 JD…打招呼/删除；JOB-008 黑名单拦截；JOB-009 默认模板打招呼 |
 | CHAT-001～006 / APP-001～004 | `ConversationLiveIT` | 创建对话、消息、推荐回复、投递、看板、改状态、时间线备注 |

@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.13 | V2 阶段 A：`/platforms/connections|tasks` MOCK 半自动 | orjrs |
 | 2026-11-26 | v1.12 | `PUT /users/me/password` 改密码 | orjrs |
 | 2026-11-26 | v1.11 | 投递时间线备注：`GET /applications/{id}`、`POST …/notes`；状态变更可带 note | orjrs |
 | 2026-11-23 | v1.10 | `/api/v1/agent/**` 与 Swagger 须登录；匿名仅 health/auth | orjrs |
@@ -23,6 +24,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 平台 MOCK 任务骨架（2026-11-26）
+
+- **变更原因**：落地 V2 阶段 A，先打通半自动确认流。
+- **包含代码**：`PlatformController` / `PlatformService`；`PlatformTaskLiveIT`。
+- **约定**：`POST /platforms/connections` 仅 MOCK；`POST /tasks/{id}/confirm` 立即 DONE（mock），不爬站。
 
 ## [变更] 登录用户可改密码（2026-11-26）
 
@@ -1193,6 +1200,21 @@ POST /api/v1/applications/{id}/notes
 ```
 
 写入时间线 `NOTE`；若投递尚无 `applyNote`，顺带写入首条备注。列表 / 看板 / 详情的 `timeline` 字段返回事件数组（`eventType` / `title` / `description` / `occurredAt`）。
+
+---
+
+# 七-B、平台连接（V2 阶段 A · MOCK）
+
+```
+GET  /api/v1/platforms/connections
+POST /api/v1/platforms/connections   { "platform": "MOCK" }
+GET  /api/v1/platforms/tasks
+POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO" }
+POST /api/v1/platforms/tasks/{id}/confirm
+```
+
+`action`：`SYNC_JOBS` / `DRAFT_GREET` / `FILL_REPLY` / `MARK_APPLIED`。  
+阶段 A：`BOSS`/`LIEPIN` 创建连接 → 400；确认任务 → 立即 `DONE`（mock）。
 
 ---
 

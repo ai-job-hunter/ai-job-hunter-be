@@ -8,8 +8,15 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.2 | 增 `platform_connections` / `platform_tasks`（V2 阶段 A MOCK） | orjrs |
 | 2026-11-26 | v1.1 | 落地 `application_timelines`（JPA ddl-auto）；事件含 SUBMITTED/STATUS_CHANGED/NOTE | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
+
+## [变更] 平台连接/任务表（2026-11-26）
+
+- **变更原因**：V2 阶段 A 半自动骨架需要持久化连接与任务。
+- **包含代码**：`PlatformConnection` / `PlatformTask`；`ddl-auto=update`。
+- **约定**：阶段 A 仅 `platform=MOCK` 可 CONNECTED；`BOSS`/`LIEPIN` API 拒绝；任务确认走 mock，不访问外站。
 
 ## [变更] 投递时间线表落地（2026-11-26）
 

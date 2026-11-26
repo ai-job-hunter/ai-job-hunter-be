@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.1 | 阶段 A 落地：MOCK 连接/任务 API + FE `/platforms`（agent 仓仍待建） | orjrs |
 | 2026-11-26 | v1.0 | 初稿：合规边界、架构、分阶段交付、与 V1 边界 | orjrs |
 
 ---
@@ -115,13 +116,13 @@
 
 ### 阶段 A — 骨架（约 1 周）
 
-- [ ] 新建 `ai-job-hunter-agent` 空仓 + README + 与 BE 的健康检查心跳  
-- [ ] BE：`platform_connection` / `platform_task` 表设计写入 `04-ER-DESIGN.md`  
-- [ ] API：创建连接、列任务、确认任务（无真实平台动作）  
-- [ ] FE：占位页「平台连接（即将开放）」+ 任务列表 UI  
-- [ ] 门禁：`PlatformTaskLiveIT` 冒烟 + FE e2e 占位  
+- [ ] 新建 `ai-job-hunter-agent` 空仓 + README + 与 BE 的健康检查心跳（延后到阶段 B 前）  
+- [x] BE：`platform_connections` / `platform_tasks`（JPA）+ `04-ER-DESIGN` / API 文档  
+- [x] API：创建连接、列任务、确认任务（MOCK，无真实平台动作）  
+- [x] FE：`/platforms` MOCK 半自动确认流  
+- [x] 门禁：`PlatformTaskLiveIT` + `e2e/platforms.spec.ts`  
 
-**验收**：不连任何招聘站，端到端能走完「建任务 → 确认 → 完成（mock）」。
+**验收**：不连任何招聘站，端到端能走完「建任务 → 确认 → 完成（mock）」。✅ 2026-11-26
 
 ### 阶段 B — 首个合规连接器（约 2 周）
 
