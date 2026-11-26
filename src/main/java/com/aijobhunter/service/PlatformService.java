@@ -4,6 +4,8 @@ import com.aijobhunter.domain.platform.PlatformConnection;
 import com.aijobhunter.domain.platform.PlatformConnectionRepository;
 import com.aijobhunter.domain.platform.PlatformTask;
 import com.aijobhunter.domain.platform.PlatformTaskRepository;
+import com.aijobhunter.domain.user.User;
+import com.aijobhunter.domain.user.UserRepository;
 import com.aijobhunter.dto.CreateJobRequest;
 import com.aijobhunter.dto.JobDTO;
 import lombok.RequiredArgsConstructor;
@@ -28,13 +30,14 @@ public class PlatformService {
 
     private static final Set<String> ALLOWED_PLATFORMS = Set.of("MOCK", "LIEPIN", "BOSS");
     private static final Set<String> ALLOWED_ACTIONS = Set.of(
-            "SYNC_JOBS", "DRAFT_GREET", "FILL_REPLY", "MARK_APPLIED", "IMPORT_CHAT");
+            "SYNC_JOBS", "DRAFT_GREET", "FILL_REPLY", "MARK_APPLIED", "IMPORT_CHAT", "SUGGEST_REPLY");
 
     private final PlatformConnectionRepository connectionRepository;
     private final PlatformTaskRepository taskRepository;
     private final JobService jobService;
     private final ApplicationService applicationService;
     private final ConversationService conversationService;
+    private final UserRepository userRepository;
 
     @Transactional
     public Map<String, Object> createConnection(String userId, String platform) {
@@ -82,7 +85,8 @@ public class PlatformService {
             String resumeId,
             String applyNote,
             String hrName,
-            String chatText) {
+            String chatText,
+            String conversationId) {
         if (connectionId == null || connectionId.isBlank()) {
             throw new IllegalArgumentException("请选择平台连接");
         }
@@ -139,6 +143,28 @@ public class PlatformService {
             if (hrName != null && !hrName.isBlank()) {
                 request.put("hrName", hrName.trim());
             }
+        } else if ("SUGGEST_REPLY".equals(act)) {
+            if (conversationId == null || conversationId.isBlank()) {
+                throw new IllegalArgumentException("请选择要生成回复的会话");
+            }
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new IllegalArgumentException("用户不存在"));
+            Map<String, Object> suggest = conversationService.suggestedReply(userId, user, conversationId.trim());
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> suggestions = suggest.get("suggestions") instanceof List<?> list
+                    ? (List<Map<String, Object>>) list
+                    : List.of();
+            String text = "";
+            if (!suggestions.isEmpty() && suggestions.get(0) != null && suggestions.get(0).get("content") != null) {
+                text = suggestions.get(0).get("content").toString().trim();
+            }
+            if (text.isEmpty()) {
+                throw new IllegalStateException("未能生成推荐回复");
+            }
+            request.put("hint", "确认后复制推荐回复到剪贴板（不代发）");
+            request.put("conversationId", conversationId.trim());
+            request.put("draftText", text);
+            request.put("suggestedPreview", text.length() > 80 ? text.substring(0, 80) + "…" : text);
         } else {
             request.put("hint", "mock：确认后仅标记完成，不会访问真实招聘站");
         }
@@ -197,7 +223,9 @@ public class PlatformService {
                 result.put("syncedJobs", 1);
                 result.put("jobId", job.getId());
                 result.put("jobTitle", job.getTitle());
-            } else if ("DRAFT_GREET".equals(task.getAction()) || "FILL_REPLY".equals(task.getAction())) {
+            } else if ("DRAFT_GREET".equals(task.getAction())
+                    || "FILL_REPLY".equals(task.getAction())
+                    || "SUGGEST_REPLY".equals(task.getAction())) {
                 Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
                 Object draft = req.get("draftText");
                 if (draft == null || draft.toString().isBlank()) {
@@ -205,7 +233,12 @@ public class PlatformService {
                 }
                 String text = draft.toString();
                 result.put("clipboardText", text);
-                result.put("message", "话术已就绪，请复制到招聘 App");
+                result.put("message", "SUGGEST_REPLY".equals(task.getAction())
+                        ? "推荐回复已就绪，请复制到招聘 App"
+                        : "话术已就绪，请复制到招聘 App");
+                if (req.get("conversationId") != null) {
+                    result.put("conversationId", req.get("conversationId").toString());
+                }
                 result.put("syncedJobs", 0);
             } else if ("MARK_APPLIED".equals(task.getAction())) {
                 Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();

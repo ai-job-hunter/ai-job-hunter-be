@@ -47,6 +47,7 @@ class PlatformTaskLiveIT {
     private static String taskId;
     private static String importedJobId;
     private static String resumeId;
+    private static String conversationId;
 
     static boolean backendUp() {
         try {
@@ -286,10 +287,52 @@ class PlatformTaskLiveIT {
         assertThat(res.body()).contains("DONE");
         assertThat(res.body()).contains("conversationId");
         assertThat(res.body()).contains("importedMessages");
+        conversationId = extractField(res.body(), "conversationId");
+        assertThat(conversationId).isNotBlank();
 
         HttpResponse<String> convs = getAuth("/api/v1/conversations");
         assertThat(convs.statusCode()).isEqualTo(200);
         assertThat(convs.body()).contains("王HR");
+    }
+
+    @Test
+    @Order(12)
+    @DisplayName("PLAT-012 SUGGEST_REPLY 生成待确认话术")
+    void createSuggestReplyTask() throws Exception {
+        HttpResponse<String> missing = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"SUGGEST_REPLY",
+                  "mode":"SEMI_AUTO"
+                }
+                """.formatted(connectionId));
+        assertThat(missing.statusCode()).isEqualTo(400);
+
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"SUGGEST_REPLY",
+                  "mode":"SEMI_AUTO",
+                  "conversationId":"%s"
+                }
+                """.formatted(connectionId, conversationId));
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("NEED_CONFIRM");
+        assertThat(res.body()).contains("draftText");
+        taskId = firstId(res.body());
+    }
+
+    @Test
+    @Order(13)
+    @DisplayName("PLAT-013 确认 SUGGEST_REPLY → clipboardText")
+    void confirmSuggestReply() throws Exception {
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks/" + taskId + "/confirm", "{}");
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("DONE");
+        assertThat(res.body()).contains("clipboardText");
+        assertThat(res.body()).contains("推荐回复已就绪");
     }
 
     private static String extractField(String body, String field) {

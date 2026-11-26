@@ -65,7 +65,8 @@ public class PlatformController {
                         body == null ? null : body.getResumeId(),
                         body == null ? null : body.getApplyNote(),
                         body == null ? null : body.getHrName(),
-                        body == null ? null : body.getChatText())));
+                        body == null ? null : body.getChatText(),
+                        body == null ? null : body.getConversationId())));
     }
 
     @PostMapping("/tasks/{id}/confirm")
@@ -99,5 +100,7 @@ public class PlatformController {
         /** IMPORT_CHAT：HR 名与粘贴原文 */
         private String hrName;
         private String chatText;
+        /** SUGGEST_REPLY：已有会话 */
+        private String conversationId;
     }
 }
