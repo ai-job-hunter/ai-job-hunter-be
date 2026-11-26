@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.8 | 阶段 C 主路径收口；FE e2e 覆盖 IMPORT_CHAT | orjrs |
 | 2026-11-26 | v1.7 | SUGGEST_REPLY 确认时回填会话 OUTBOUND + 复制 | orjrs |
 | 2026-11-26 | v1.6 | SUGGEST_REPLY：AI 建议 → 确认 → 复制剪贴板 | orjrs |
 | 2026-11-26 | v1.5 | IMPORT_CHAT 本机粘贴聊天导入会话 | orjrs |
@@ -137,7 +138,7 @@
 - [x] `MARK_APPLIED` 选岗位+简历 → 确认后写入投递看板  
 - [x] 本机粘贴导入会话：`IMPORT_CHAT` → `conversations`  
 - [x] `SUGGEST_REPLY`：ChatAgent 建议 → 确认 → 回填会话 OUTBOUND + 复制剪贴板（仍不代发）  
-- [ ] 投递状态与看板联动的更多自动化（仍可手动改）  
+- [ ] ~~投递状态与看板联动的更多自动化~~ → 延后：`MARK_APPLIED` 已写入看板；细粒度状态仍手动改（2026-11-26）  
 
 ### 阶段 D — BOSS（更晚，需授权）
 
