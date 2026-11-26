@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.16 | MARK_APPLIED 须 `jobId`+`resumeId`；确认后写入投递看板 | orjrs |
 | 2026-11-26 | v1.15 | DRAFT_GREET/FILL_REPLY 须 `draftText`；确认返回 `clipboardText` 供前端复制 | orjrs |
 | 2026-11-26 | v1.14 | 平台 SYNC_JOBS 可带 JD，确认后 `source=IMPORT`；不建 agent 仓 | orjrs |
 | 2026-11-26 | v1.13 | V2 阶段 A：`/platforms/connections|tasks` MOCK 半自动 | orjrs |
@@ -26,6 +27,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 平台 MARK_APPLIED 写入投递（2026-11-26）
+
+- **变更原因**：阶段 C：平台页标记「已投递」应进看板，避免只 mock 完成。
+- **包含代码**：`CreateTaskRequest.jobId/resumeId/applyNote`；`PlatformService` 调 `ApplicationService#create`；LiveIT PLAT-007～009。
+- **约定**：缺岗位/简历 → 400；重复投递同一岗位 → 失败（沿用投递服务）。
 
 ## [变更] 平台草稿话术返回剪贴板字段（2026-11-26）
 
@@ -1217,13 +1224,14 @@ POST /api/v1/applications/{id}/notes
 GET  /api/v1/platforms/connections
 POST /api/v1/platforms/connections   { "platform": "MOCK" }
 GET  /api/v1/platforms/tasks
-POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO", "rawDescription"?, "draftText"? }
+POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO", "rawDescription"?, "draftText"?, "jobId"?, "resumeId"?, "applyNote"? }
 POST /api/v1/platforms/tasks/{id}/confirm
 ```
 
 `action`：`SYNC_JOBS` / `DRAFT_GREET` / `FILL_REPLY` / `MARK_APPLIED`。  
 `SYNC_JOBS` 须带 `rawDescription`；确认后创建岗位 `source=IMPORT`（不爬站、**无独立 agent 仓**）。  
 `DRAFT_GREET` / `FILL_REPLY` 须带 `draftText`；确认后 `result.clipboardText` 返回原文，前端可写入系统剪贴板（用户再粘贴到招聘 App）。  
+`MARK_APPLIED` 须带 `jobId` + `resumeId`（可选 `applyNote`）；确认后创建投递 `SUBMITTED`，返回 `applicationId`。  
 `BOSS`/`LIEPIN` 创建连接 → 400。
 
 ---

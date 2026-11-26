@@ -33,6 +33,7 @@ public class PlatformService {
     private final PlatformConnectionRepository connectionRepository;
     private final PlatformTaskRepository taskRepository;
     private final JobService jobService;
+    private final ApplicationService applicationService;
 
     @Transactional
     public Map<String, Object> createConnection(String userId, String platform) {
@@ -75,7 +76,10 @@ public class PlatformService {
             String rawDescription,
             String title,
             String companyName,
-            String draftText) {
+            String draftText,
+            String jobId,
+            String resumeId,
+            String applyNote) {
         if (connectionId == null || connectionId.isBlank()) {
             throw new IllegalArgumentException("请选择平台连接");
         }
@@ -107,6 +111,19 @@ public class PlatformService {
             }
             request.put("hint", "确认后返回话术，前端可复制到招聘 App（不代发）");
             request.put("draftText", draftText.trim());
+        } else if ("MARK_APPLIED".equals(act)) {
+            if (jobId == null || jobId.isBlank()) {
+                throw new IllegalArgumentException("标记已投递请选择岗位");
+            }
+            if (resumeId == null || resumeId.isBlank()) {
+                throw new IllegalArgumentException("标记已投递请选择简历");
+            }
+            request.put("hint", "确认后写入投递看板（SUBMITTED），不访问招聘站");
+            request.put("jobId", jobId.trim());
+            request.put("resumeId", resumeId.trim());
+            if (applyNote != null && !applyNote.isBlank()) {
+                request.put("applyNote", applyNote.trim());
+            }
         } else {
             request.put("hint", "mock：确认后仅标记完成，不会访问真实招聘站");
         }
@@ -174,6 +191,21 @@ public class PlatformService {
                 String text = draft.toString();
                 result.put("clipboardText", text);
                 result.put("message", "话术已就绪，请复制到招聘 App");
+                result.put("syncedJobs", 0);
+            } else if ("MARK_APPLIED".equals(task.getAction())) {
+                Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
+                Object jid = req.get("jobId");
+                Object rid = req.get("resumeId");
+                if (jid == null || jid.toString().isBlank() || rid == null || rid.toString().isBlank()) {
+                    throw new IllegalArgumentException("任务缺少岗位或简历");
+                }
+                Object noteObj = req.get("applyNote");
+                String note = noteObj == null ? null : noteObj.toString();
+                Map<String, Object> app = applicationService.create(
+                        userId, jid.toString(), rid.toString(), note);
+                result.put("message", "已记入投递看板");
+                result.put("applicationId", app.get("id"));
+                result.put("jobId", jid.toString());
                 result.put("syncedJobs", 0);
             } else {
                 result.put("message", "mock 已完成：" + task.getAction());

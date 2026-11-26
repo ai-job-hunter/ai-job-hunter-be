@@ -12,6 +12,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -39,9 +40,13 @@ class PlatformTaskLiveIT {
     private static final Pattern TOKEN = Pattern.compile("\"token\"\\s*:\\s*\"([^\"]+)\"");
     private static final Pattern ID = Pattern.compile("\"id\"\\s*:\\s*\"([^\"]+)\"");
 
+    private static final String BOUNDARY = "----PlatLiveBoundary7MA4YWxk";
+
     private static String token;
     private static String connectionId;
     private static String taskId;
+    private static String importedJobId;
+    private static String resumeId;
 
     static boolean backendUp() {
         try {
@@ -123,6 +128,8 @@ class PlatformTaskLiveIT {
         assertThat(res.body()).contains("DONE");
         assertThat(res.body()).contains("jobId");
         assertThat(res.body()).contains("导入测试岗");
+        importedJobId = extractField(res.body(), "jobId");
+        assertThat(importedJobId).isNotBlank();
 
         HttpResponse<String> jobs = getAuth("/api/v1/jobs");
         assertThat(jobs.statusCode()).isEqualTo(200);
@@ -168,6 +175,107 @@ class PlatformTaskLiveIT {
         assertThat(res.body()).contains("DONE");
         assertThat(res.body()).contains("clipboardText");
         assertThat(res.body()).contains("我对贵司 Java 岗位很感兴趣");
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("PLAT-007 上传简历供标记投递")
+    void uploadResumeForMarkApplied() throws Exception {
+        byte[] body = multipartBody(
+                "plat-resume.txt",
+                "text/plain",
+                "李四\nJava\n3年".getBytes(StandardCharsets.UTF_8),
+                "平台测简历",
+                "TECHNICAL",
+                "true");
+        HttpRequest req = HttpRequest.newBuilder(URI.create(BASE + "/api/v1/resumes/upload"))
+                .timeout(Duration.ofSeconds(20))
+                .header("Authorization", "Bearer " + token)
+                .header("Content-Type", "multipart/form-data; boundary=" + BOUNDARY)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
+                .build();
+        HttpResponse<String> res = CLIENT.send(req, HttpResponse.BodyHandlers.ofString());
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        resumeId = firstId(res.body());
+        assertThat(resumeId).isNotBlank();
+    }
+
+    @Test
+    @Order(8)
+    @DisplayName("PLAT-008 MARK_APPLIED 创建任务须 jobId+resumeId")
+    void createMarkAppliedTask() throws Exception {
+        HttpResponse<String> missing = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"MARK_APPLIED",
+                  "mode":"SEMI_AUTO"
+                }
+                """.formatted(connectionId));
+        assertThat(missing.statusCode()).isEqualTo(400);
+
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"MARK_APPLIED",
+                  "mode":"SEMI_AUTO",
+                  "jobId":"%s",
+                  "resumeId":"%s",
+                  "applyNote":"平台页标记"
+                }
+                """.formatted(connectionId, importedJobId, resumeId));
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("NEED_CONFIRM");
+        taskId = firstId(res.body());
+    }
+
+    @Test
+    @Order(9)
+    @DisplayName("PLAT-009 确认 MARK_APPLIED → 投递看板")
+    void confirmMarkApplied() throws Exception {
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks/" + taskId + "/confirm", "{}");
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("DONE");
+        assertThat(res.body()).contains("applicationId");
+        assertThat(res.body()).contains("已记入投递看板");
+
+        HttpResponse<String> apps = getAuth("/api/v1/applications");
+        assertThat(apps.statusCode()).isEqualTo(200);
+        assertThat(apps.body()).contains(importedJobId);
+        assertThat(apps.body()).contains("SUBMITTED");
+    }
+
+    private static String extractField(String body, String field) {
+        Matcher m = Pattern.compile("\"" + field + "\"\\s*:\\s*\"([^\"]+)\"").matcher(body);
+        assertThat(m.find()).as("body has %s: %s", field, body).isTrue();
+        return m.group(1);
+    }
+
+    private static byte[] multipartBody(
+            String filename, String mime, byte[] fileBytes,
+            String name, String type, String isDefault) {
+        StringBuilder sb = new StringBuilder();
+        appendPart(sb, "name", name);
+        appendPart(sb, "type", type);
+        appendPart(sb, "isDefault", isDefault);
+        sb.append("--").append(BOUNDARY).append("\r\n");
+        sb.append("Content-Disposition: form-data; name=\"file\"; filename=\"").append(filename).append("\"\r\n");
+        sb.append("Content-Type: ").append(mime).append("\r\n\r\n");
+        byte[] head = sb.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] tail = ("\r\n--" + BOUNDARY + "--\r\n").getBytes(StandardCharsets.UTF_8);
+        byte[] all = new byte[head.length + fileBytes.length + tail.length];
+        System.arraycopy(head, 0, all, 0, head.length);
+        System.arraycopy(fileBytes, 0, all, head.length, fileBytes.length);
+        System.arraycopy(tail, 0, all, head.length + fileBytes.length, tail.length);
+        return all;
+    }
+
+    private static void appendPart(StringBuilder sb, String name, String value) {
+        sb.append("--").append(BOUNDARY).append("\r\n");
+        sb.append("Content-Disposition: form-data; name=\"").append(name).append("\"\r\n\r\n");
+        sb.append(value).append("\r\n");
     }
 
     private static String firstId(String body) {

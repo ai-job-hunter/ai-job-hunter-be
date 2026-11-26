@@ -60,7 +60,10 @@ public class PlatformController {
                         body == null ? null : body.getRawDescription(),
                         body == null ? null : body.getTitle(),
                         body == null ? null : body.getCompanyName(),
-                        body == null ? null : body.getDraftText())));
+                        body == null ? null : body.getDraftText(),
+                        body == null ? null : body.getJobId(),
+                        body == null ? null : body.getResumeId(),
+                        body == null ? null : body.getApplyNote())));
     }
 
     @PostMapping("/tasks/{id}/confirm")
@@ -87,5 +90,9 @@ public class PlatformController {
         private String companyName;
         /** DRAFT_GREET / FILL_REPLY：待复制话术 */
         private String draftText;
+        /** MARK_APPLIED：岗位 / 简历 / 备注 */
+        private String jobId;
+        private String resumeId;
+        private String applyNote;
     }
 }
