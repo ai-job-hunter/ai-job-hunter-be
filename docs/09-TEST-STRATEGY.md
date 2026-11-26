@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.17 | 平台导入 JD→IMPORT；明确不建 agent 仓 | orjrs |
 | 2026-11-26 | v1.16 | PlatformTaskLiveIT PLAT-001～004；FE platforms E2E | orjrs |
 | 2026-11-26 | v1.15 | USER-004 改密码；FE profile E2E | orjrs |
 | 2026-11-26 | v1.14 | APP-004 投递时间线备注；ConversationLiveIT 扩展 | orjrs |

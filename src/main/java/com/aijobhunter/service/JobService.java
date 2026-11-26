@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -47,6 +48,17 @@ public class JobService {
 
     @Transactional
     public JobDTO create(String userId, CreateJobRequest request) {
+        // 公开创建接口固定 MANUAL，避免客户端伪造 IMPORT/PLATFORM
+        return createInternal(userId, request, "MANUAL");
+    }
+
+    /** 平台半自动导入（仅服务端调用） */
+    @Transactional
+    public JobDTO createImported(String userId, CreateJobRequest request) {
+        return createInternal(userId, request, "IMPORT");
+    }
+
+    private JobDTO createInternal(String userId, CreateJobRequest request, String source) {
         if (request.getRawDescription() == null || request.getRawDescription().isBlank()) {
             throw new IllegalArgumentException("请粘贴岗位 JD 原文");
         }
@@ -62,7 +74,7 @@ public class JobService {
 
         Job job = Job.builder()
                 .userId(userId)
-                .source("MANUAL")
+                .source(normalizeSource(source))
                 .sourceUrl(blankToNull(request.getSourceUrl()))
                 .title(title)
                 .companyName(company)
@@ -356,6 +368,17 @@ public class JobService {
             }
         }
         return best;
+    }
+
+    private static String normalizeSource(String source) {
+        if (source == null || source.isBlank()) {
+            return "MANUAL";
+        }
+        String s = source.trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("MANUAL", "IMPORT", "PLATFORM").contains(s)) {
+            throw new IllegalArgumentException("不支持的岗位来源: " + source);
+        }
+        return s;
     }
 
     private static String blankToNull(String s) {

@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.14 | 平台 SYNC_JOBS 可带 JD，确认后 `source=IMPORT`；不建 agent 仓 | orjrs |
 | 2026-11-26 | v1.13 | V2 阶段 A：`/platforms/connections|tasks` MOCK 半自动 | orjrs |
 | 2026-11-26 | v1.12 | `PUT /users/me/password` 改密码 | orjrs |
 | 2026-11-26 | v1.11 | 投递时间线备注：`GET /applications/{id}`、`POST …/notes`；状态变更可带 note | orjrs |
@@ -1209,12 +1210,13 @@ POST /api/v1/applications/{id}/notes
 GET  /api/v1/platforms/connections
 POST /api/v1/platforms/connections   { "platform": "MOCK" }
 GET  /api/v1/platforms/tasks
-POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO" }
+POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO", "rawDescription"? }
 POST /api/v1/platforms/tasks/{id}/confirm
 ```
 
 `action`：`SYNC_JOBS` / `DRAFT_GREET` / `FILL_REPLY` / `MARK_APPLIED`。  
-阶段 A：`BOSS`/`LIEPIN` 创建连接 → 400；确认任务 → 立即 `DONE`（mock）。
+`SYNC_JOBS` 须带 `rawDescription`；确认后创建岗位 `source=IMPORT`（不爬站、**无独立 agent 仓**）。  
+`BOSS`/`LIEPIN` 创建连接 → 400。
 
 ---
 

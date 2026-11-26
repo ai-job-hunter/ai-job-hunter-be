@@ -94,10 +94,17 @@ class PlatformTaskLiveIT {
 
     @Test
     @Order(3)
-    @DisplayName("PLAT-003 创建待确认任务")
+    @DisplayName("PLAT-003 创建待确认导入任务（带 JD）")
     void createTask() throws Exception {
         HttpResponse<String> res = postAuth("/api/v1/platforms/tasks", """
-                {"connectionId":"%s","action":"SYNC_JOBS","mode":"SEMI_AUTO"}
+                {
+                  "connectionId":"%s",
+                  "action":"SYNC_JOBS",
+                  "mode":"SEMI_AUTO",
+                  "title":"导入测试岗",
+                  "companyName":"MockCorp",
+                  "rawDescription":"负责 Java 后端开发，熟悉 Spring Boot。"
+                }
                 """.formatted(connectionId));
         assertThat(res.statusCode()).isEqualTo(200);
         assertThat(code(res.body())).isEqualTo(0);
@@ -108,18 +115,19 @@ class PlatformTaskLiveIT {
 
     @Test
     @Order(4)
-    @DisplayName("PLAT-004 确认任务 → DONE（mock）")
+    @DisplayName("PLAT-004 确认任务 → DONE 并导入岗位")
     void confirmTask() throws Exception {
         HttpResponse<String> res = postAuth("/api/v1/platforms/tasks/" + taskId + "/confirm", "{}");
         assertThat(res.statusCode()).isEqualTo(200);
         assertThat(code(res.body())).isEqualTo(0);
         assertThat(res.body()).contains("DONE");
-        assertThat(res.body()).contains("mock");
+        assertThat(res.body()).contains("jobId");
+        assertThat(res.body()).contains("导入测试岗");
 
-        HttpResponse<String> list = getAuth("/api/v1/platforms/tasks");
-        assertThat(list.statusCode()).isEqualTo(200);
-        assertThat(list.body()).contains(taskId);
-        assertThat(list.body()).contains("DONE");
+        HttpResponse<String> jobs = getAuth("/api/v1/jobs");
+        assertThat(jobs.statusCode()).isEqualTo(200);
+        assertThat(jobs.body()).contains("IMPORT");
+        assertThat(jobs.body()).contains("导入测试岗");
     }
 
     private static String firstId(String body) {

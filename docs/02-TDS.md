@@ -647,7 +647,7 @@ ai-job-hunter/
 |-----|---------|
 | 后端（含 LLM Agent） | `ai-job-hunter-be/` |
 | 前端 | `ai-job-hunter-fe/` |
-| 平台 Agent（V2，待建） | `ai-job-hunter-agent/` |
+| ~~平台 Agent 独立仓~~ | **不建**（2026-11-26）；平台任务在 be） |
 | V2 方案 | `ai-job-hunter-be/docs/12-V2-PLATFORM-AGENT-PLAN.md` |
 
 ---

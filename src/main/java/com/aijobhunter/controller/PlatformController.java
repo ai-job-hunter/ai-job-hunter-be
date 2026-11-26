@@ -56,7 +56,10 @@ public class PlatformController {
                         user.getId(),
                         body == null ? null : body.getConnectionId(),
                         body == null ? null : body.getAction(),
-                        body == null ? null : body.getMode())));
+                        body == null ? null : body.getMode(),
+                        body == null ? null : body.getRawDescription(),
+                        body == null ? null : body.getTitle(),
+                        body == null ? null : body.getCompanyName())));
     }
 
     @PostMapping("/tasks/{id}/confirm")
@@ -77,5 +80,9 @@ public class PlatformController {
         private String connectionId;
         private String action;
         private String mode;
+        /** SYNC_JOBS：本机粘贴的 JD 原文 */
+        private String rawDescription;
+        private String title;
+        private String companyName;
     }
 }
