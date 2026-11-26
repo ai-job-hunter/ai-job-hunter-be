@@ -247,6 +247,51 @@ class PlatformTaskLiveIT {
         assertThat(apps.body()).contains("SUBMITTED");
     }
 
+    @Test
+    @Order(10)
+    @DisplayName("PLAT-010 IMPORT_CHAT 创建任务须 chatText")
+    void createImportChatTask() throws Exception {
+        HttpResponse<String> missing = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"IMPORT_CHAT",
+                  "mode":"SEMI_AUTO"
+                }
+                """.formatted(connectionId));
+        assertThat(missing.statusCode()).isEqualTo(400);
+
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"IMPORT_CHAT",
+                  "mode":"SEMI_AUTO",
+                  "hrName":"王HR",
+                  "jobId":"%s",
+                  "chatText":"HR: 您好，方便聊聊吗？\\n我: 方便，请问技术栈？\\n还在看人吗"
+                }
+                """.formatted(connectionId, importedJobId));
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("NEED_CONFIRM");
+        taskId = firstId(res.body());
+    }
+
+    @Test
+    @Order(11)
+    @DisplayName("PLAT-011 确认 IMPORT_CHAT → 沟通列表")
+    void confirmImportChat() throws Exception {
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks/" + taskId + "/confirm", "{}");
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("DONE");
+        assertThat(res.body()).contains("conversationId");
+        assertThat(res.body()).contains("importedMessages");
+
+        HttpResponse<String> convs = getAuth("/api/v1/conversations");
+        assertThat(convs.statusCode()).isEqualTo(200);
+        assertThat(convs.body()).contains("王HR");
+    }
+
     private static String extractField(String body, String field) {
         Matcher m = Pattern.compile("\"" + field + "\"\\s*:\\s*\"([^\"]+)\"").matcher(body);
         assertThat(m.find()).as("body has %s: %s", field, body).isTrue();

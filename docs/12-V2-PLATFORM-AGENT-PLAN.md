@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.5 | IMPORT_CHAT 本机粘贴聊天导入会话 | orjrs |
 | 2026-11-26 | v1.4 | MARK_APPLIED 确认后写入投递看板 | orjrs |
 | 2026-11-26 | v1.3 | 阶段 C 小步：DRAFT_GREET/FILL_REPLY → 确认后 `clipboardText` 自动复制 | orjrs |
 | 2026-11-26 | v1.2 | **不建**独立 `ai-job-hunter-agent` 仓；阶段 B 优先本机导入 JD | orjrs |
@@ -132,7 +133,7 @@
 
 - [x] **小步**：`DRAFT_GREET` / `FILL_REPLY` 带 `draftText`，确认后返回 `clipboardText`，FE 自动写入剪贴板（用户再粘贴到 App）  
 - [x] `MARK_APPLIED` 选岗位+简历 → 确认后写入投递看板  
-- [ ] 同步/导入会话消息到 `conversations`  
+- [x] 本机粘贴导入会话：`IMPORT_CHAT` → `conversations`  
 - [ ] `ChatAgent` 建议 → 确认 → 回填（仍不代发）  
 - [ ] 投递状态与看板联动的更多自动化（仍可手动改）  
 

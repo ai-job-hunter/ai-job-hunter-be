@@ -63,7 +63,9 @@ public class PlatformController {
                         body == null ? null : body.getDraftText(),
                         body == null ? null : body.getJobId(),
                         body == null ? null : body.getResumeId(),
-                        body == null ? null : body.getApplyNote())));
+                        body == null ? null : body.getApplyNote(),
+                        body == null ? null : body.getHrName(),
+                        body == null ? null : body.getChatText())));
     }
 
     @PostMapping("/tasks/{id}/confirm")
@@ -90,9 +92,12 @@ public class PlatformController {
         private String companyName;
         /** DRAFT_GREET / FILL_REPLY：待复制话术 */
         private String draftText;
-        /** MARK_APPLIED：岗位 / 简历 / 备注 */
+        /** MARK_APPLIED / IMPORT_CHAT：岗位 */
         private String jobId;
         private String resumeId;
         private String applyNote;
+        /** IMPORT_CHAT：HR 名与粘贴原文 */
+        private String hrName;
+        private String chatText;
     }
 }

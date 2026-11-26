@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.17 | IMPORT_CHAT 粘贴聊天导入会话；行前缀 HR:/我: | orjrs |
 | 2026-11-26 | v1.16 | MARK_APPLIED 须 `jobId`+`resumeId`；确认后写入投递看板 | orjrs |
 | 2026-11-26 | v1.15 | DRAFT_GREET/FILL_REPLY 须 `draftText`；确认返回 `clipboardText` 供前端复制 | orjrs |
 | 2026-11-26 | v1.14 | 平台 SYNC_JOBS 可带 JD，确认后 `source=IMPORT`；不建 agent 仓 | orjrs |
@@ -27,6 +28,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 平台 IMPORT_CHAT 导入会话（2026-11-26）
+
+- **变更原因**：阶段 C：本机粘贴聊天进沟通列表，少开第三仓。
+- **包含代码**：`ConversationService#importFromPaste`；`IMPORT_CHAT` 任务；LiveIT PLAT-010/011。
+- **约定**：缺 `chatText` → 400；无前缀行默认 INBOUND。
 
 ## [变更] 平台 MARK_APPLIED 写入投递（2026-11-26）
 
@@ -1228,10 +1235,11 @@ POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_A
 POST /api/v1/platforms/tasks/{id}/confirm
 ```
 
-`action`：`SYNC_JOBS` / `DRAFT_GREET` / `FILL_REPLY` / `MARK_APPLIED`。  
+`action`：`SYNC_JOBS` / `DRAFT_GREET` / `FILL_REPLY` / `MARK_APPLIED` / `IMPORT_CHAT`。  
 `SYNC_JOBS` 须带 `rawDescription`；确认后创建岗位 `source=IMPORT`（不爬站、**无独立 agent 仓**）。  
 `DRAFT_GREET` / `FILL_REPLY` 须带 `draftText`；确认后 `result.clipboardText` 返回原文，前端可写入系统剪贴板（用户再粘贴到招聘 App）。  
 `MARK_APPLIED` 须带 `jobId` + `resumeId`（可选 `applyNote`）；确认后创建投递 `SUBMITTED`，返回 `applicationId`。  
+`IMPORT_CHAT` 须带 `chatText`（可选 `hrName` / `jobId`）；按行解析 `HR:`/`我:`，确认后写入沟通列表，返回 `conversationId`。  
 `BOSS`/`LIEPIN` 创建连接 → 400。
 
 ---

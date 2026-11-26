@@ -28,12 +28,13 @@ public class PlatformService {
 
     private static final Set<String> ALLOWED_PLATFORMS = Set.of("MOCK", "LIEPIN", "BOSS");
     private static final Set<String> ALLOWED_ACTIONS = Set.of(
-            "SYNC_JOBS", "DRAFT_GREET", "FILL_REPLY", "MARK_APPLIED");
+            "SYNC_JOBS", "DRAFT_GREET", "FILL_REPLY", "MARK_APPLIED", "IMPORT_CHAT");
 
     private final PlatformConnectionRepository connectionRepository;
     private final PlatformTaskRepository taskRepository;
     private final JobService jobService;
     private final ApplicationService applicationService;
+    private final ConversationService conversationService;
 
     @Transactional
     public Map<String, Object> createConnection(String userId, String platform) {
@@ -79,7 +80,9 @@ public class PlatformService {
             String draftText,
             String jobId,
             String resumeId,
-            String applyNote) {
+            String applyNote,
+            String hrName,
+            String chatText) {
         if (connectionId == null || connectionId.isBlank()) {
             throw new IllegalArgumentException("请选择平台连接");
         }
@@ -123,6 +126,18 @@ public class PlatformService {
             request.put("resumeId", resumeId.trim());
             if (applyNote != null && !applyNote.isBlank()) {
                 request.put("applyNote", applyNote.trim());
+            }
+        } else if ("IMPORT_CHAT".equals(act)) {
+            if (chatText == null || chatText.isBlank()) {
+                throw new IllegalArgumentException("导入会话请粘贴聊天内容");
+            }
+            request.put("hint", "确认后写入沟通列表；行前缀 HR:/我: 可区分方向");
+            request.put("chatText", chatText.trim());
+            if (jobId != null && !jobId.isBlank()) {
+                request.put("jobId", jobId.trim());
+            }
+            if (hrName != null && !hrName.isBlank()) {
+                request.put("hrName", hrName.trim());
             }
         } else {
             request.put("hint", "mock：确认后仅标记完成，不会访问真实招聘站");
@@ -206,6 +221,23 @@ public class PlatformService {
                 result.put("message", "已记入投递看板");
                 result.put("applicationId", app.get("id"));
                 result.put("jobId", jid.toString());
+                result.put("syncedJobs", 0);
+            } else if ("IMPORT_CHAT".equals(task.getAction())) {
+                Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
+                Object chat = req.get("chatText");
+                if (chat == null || chat.toString().isBlank()) {
+                    throw new IllegalArgumentException("任务缺少聊天内容");
+                }
+                Object jid = req.get("jobId");
+                Object hr = req.get("hrName");
+                Map<String, Object> conv = conversationService.importFromPaste(
+                        userId,
+                        jid == null ? null : jid.toString(),
+                        hr == null ? null : hr.toString(),
+                        chat.toString());
+                result.put("message", "已导入会话：" + conv.getOrDefault("hrName", "HR"));
+                result.put("conversationId", conv.get("id"));
+                result.put("importedMessages", conv.get("importedMessages"));
                 result.put("syncedJobs", 0);
             } else {
                 result.put("message", "mock 已完成：" + task.getAction());

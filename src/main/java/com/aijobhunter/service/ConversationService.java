@@ -34,6 +34,66 @@ public class ConversationService {
     private final JobRepository jobRepository;
     private final ChatAgent chatAgent;
 
+    /**
+     * 本机粘贴聊天记录导入：按行解析「HR:」「我:」前缀；无前缀默认视为 HR。
+     */
+    @Transactional
+    public Map<String, Object> importFromPaste(String userId, String jobId, String hrName, String chatText) {
+        if (chatText == null || chatText.isBlank()) {
+            throw new IllegalArgumentException("请粘贴聊天内容");
+        }
+        List<String[]> lines = new ArrayList<>();
+        for (String raw : chatText.split("\\R")) {
+            if (raw == null) continue;
+            String line = raw.trim();
+            if (line.isEmpty()) continue;
+            String lower = line.toLowerCase(Locale.ROOT);
+            if (lower.startsWith("hr:") || lower.startsWith("hr：")
+                    || line.startsWith("对方:") || line.startsWith("对方：")) {
+                int idx = Math.max(line.indexOf(':'), line.indexOf('：'));
+                String body = idx >= 0 ? line.substring(idx + 1).trim() : line;
+                if (!body.isEmpty()) lines.add(new String[]{"INBOUND", body});
+            } else if (line.startsWith("我:") || line.startsWith("我：")
+                    || lower.startsWith("me:") || lower.startsWith("me：")) {
+                int idx = Math.max(line.indexOf(':'), line.indexOf('：'));
+                String body = idx >= 0 ? line.substring(idx + 1).trim() : line;
+                if (!body.isEmpty()) lines.add(new String[]{"OUTBOUND", body});
+            } else {
+                lines.add(new String[]{"INBOUND", line});
+            }
+        }
+        if (lines.isEmpty()) {
+            throw new IllegalArgumentException("没有可导入的消息行");
+        }
+
+        Job job = null;
+        if (jobId != null && !jobId.isBlank()) {
+            job = jobRepository.findByIdAndUserId(jobId, userId)
+                    .orElseThrow(() -> new IllegalArgumentException("岗位不存在"));
+        }
+        Conversation conv = Conversation.builder()
+                .userId(userId)
+                .jobId(job == null ? null : job.getId())
+                .hrName(blankTo(hrName, "HR"))
+                .status(Conversation.ConversationStatus.CHATTING)
+                .totalMessages(0)
+                .unreadCount(0)
+                .greetingSent(false)
+                .build();
+        conv = conversationRepository.save(conv);
+
+        for (String[] pair : lines) {
+            Message.Direction dir = "OUTBOUND".equals(pair[0])
+                    ? Message.Direction.OUTBOUND : Message.Direction.INBOUND;
+            appendMessage(conv, dir, pair[1], null, null);
+            conv = conversationRepository.findById(conv.getId()).orElse(conv);
+        }
+
+        Map<String, Object> data = toListItem(conv, job);
+        data.put("importedMessages", lines.size());
+        return data;
+    }
+
     @Transactional
     public Map<String, Object> create(String userId, String jobId, String hrName, String firstHrMessage) {
         Job job = null;
