@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.3 | 阶段 C 小步：DRAFT_GREET/FILL_REPLY → 确认后 `clipboardText` 自动复制 | orjrs |
 | 2026-11-26 | v1.2 | **不建**独立 `ai-job-hunter-agent` 仓；阶段 B 优先本机导入 JD | orjrs |
 | 2026-11-26 | v1.1 | 阶段 A 落地：MOCK 连接/任务 API + FE `/platforms`（agent 仓仍待建） | orjrs |
 | 2026-11-26 | v1.0 | 初稿：合规边界、架构、分阶段交付、与 V1 边界 | orjrs |
@@ -128,8 +129,9 @@
 
 ### 阶段 C — 聊天半自动（约 1～2 周）
 
+- [x] **小步**：`DRAFT_GREET` / `FILL_REPLY` 带 `draftText`，确认后返回 `clipboardText`，FE 自动写入剪贴板（用户再粘贴到 App）  
 - [ ] 同步/导入会话消息到 `conversations`  
-- [ ] `ChatAgent` 建议 → 确认 → 回填  
+- [ ] `ChatAgent` 建议 → 确认 → 回填（仍不代发）  
 - [ ] 投递状态与看板联动（仍可手动改）  
 
 ### 阶段 D — BOSS（更晚，需授权）

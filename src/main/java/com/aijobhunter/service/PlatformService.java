@@ -74,7 +74,8 @@ public class PlatformService {
             String mode,
             String rawDescription,
             String title,
-            String companyName) {
+            String companyName,
+            String draftText) {
         if (connectionId == null || connectionId.isBlank()) {
             throw new IllegalArgumentException("请选择平台连接");
         }
@@ -100,6 +101,12 @@ public class PlatformService {
             if (companyName != null && !companyName.isBlank()) {
                 request.put("companyName", companyName.trim());
             }
+        } else if ("DRAFT_GREET".equals(act) || "FILL_REPLY".equals(act)) {
+            if (draftText == null || draftText.isBlank()) {
+                throw new IllegalArgumentException("请填写要复制的话术");
+            }
+            request.put("hint", "确认后返回话术，前端可复制到招聘 App（不代发）");
+            request.put("draftText", draftText.trim());
         } else {
             request.put("hint", "mock：确认后仅标记完成，不会访问真实招聘站");
         }
@@ -158,6 +165,16 @@ public class PlatformService {
                 result.put("syncedJobs", 1);
                 result.put("jobId", job.getId());
                 result.put("jobTitle", job.getTitle());
+            } else if ("DRAFT_GREET".equals(task.getAction()) || "FILL_REPLY".equals(task.getAction())) {
+                Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
+                Object draft = req.get("draftText");
+                if (draft == null || draft.toString().isBlank()) {
+                    throw new IllegalArgumentException("任务缺少话术内容");
+                }
+                String text = draft.toString();
+                result.put("clipboardText", text);
+                result.put("message", "话术已就绪，请复制到招聘 App");
+                result.put("syncedJobs", 0);
             } else {
                 result.put("message", "mock 已完成：" + task.getAction());
                 result.put("syncedJobs", 0);

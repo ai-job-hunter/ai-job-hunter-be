@@ -130,6 +130,46 @@ class PlatformTaskLiveIT {
         assertThat(jobs.body()).contains("导入测试岗");
     }
 
+    @Test
+    @Order(5)
+    @DisplayName("PLAT-005 创建打招呼草稿任务（须 draftText）")
+    void createDraftGreetTask() throws Exception {
+        HttpResponse<String> missing = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"DRAFT_GREET",
+                  "mode":"SEMI_AUTO"
+                }
+                """.formatted(connectionId));
+        assertThat(missing.statusCode()).isEqualTo(400);
+
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks", """
+                {
+                  "connectionId":"%s",
+                  "action":"DRAFT_GREET",
+                  "mode":"SEMI_AUTO",
+                  "draftText":"您好，我对贵司 Java 岗位很感兴趣。"
+                }
+                """.formatted(connectionId));
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("NEED_CONFIRM");
+        taskId = firstId(res.body());
+        assertThat(taskId).isNotBlank();
+    }
+
+    @Test
+    @Order(6)
+    @DisplayName("PLAT-006 确认草稿 → clipboardText")
+    void confirmDraftGreet() throws Exception {
+        HttpResponse<String> res = postAuth("/api/v1/platforms/tasks/" + taskId + "/confirm", "{}");
+        assertThat(res.statusCode()).isEqualTo(200);
+        assertThat(code(res.body())).isEqualTo(0);
+        assertThat(res.body()).contains("DONE");
+        assertThat(res.body()).contains("clipboardText");
+        assertThat(res.body()).contains("我对贵司 Java 岗位很感兴趣");
+    }
+
     private static String firstId(String body) {
         Matcher m = ID.matcher(body);
         assertThat(m.find()).as("body has id: %s", body).isTrue();

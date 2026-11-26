@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.15 | DRAFT_GREET/FILL_REPLY 须 `draftText`；确认返回 `clipboardText` 供前端复制 | orjrs |
 | 2026-11-26 | v1.14 | 平台 SYNC_JOBS 可带 JD，确认后 `source=IMPORT`；不建 agent 仓 | orjrs |
 | 2026-11-26 | v1.13 | V2 阶段 A：`/platforms/connections|tasks` MOCK 半自动 | orjrs |
 | 2026-11-26 | v1.12 | `PUT /users/me/password` 改密码 | orjrs |
@@ -25,6 +26,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 平台草稿话术返回剪贴板字段（2026-11-26）
+
+- **变更原因**：阶段 C 小步——打招呼/回复不代发，只帮用户复制到剪贴板。
+- **包含代码**：`CreateTaskRequest.draftText`；确认结果 `clipboardText`；`PlatformTaskLiveIT` PLAT-005/006。
+- **约定**：`DRAFT_GREET`/`FILL_REPLY` 缺 `draftText` → 400；确认后前端 `navigator.clipboard.writeText`。
 
 ## [变更] 平台 MOCK 任务骨架（2026-11-26）
 
@@ -1210,12 +1217,13 @@ POST /api/v1/applications/{id}/notes
 GET  /api/v1/platforms/connections
 POST /api/v1/platforms/connections   { "platform": "MOCK" }
 GET  /api/v1/platforms/tasks
-POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO", "rawDescription"? }
+POST /api/v1/platforms/tasks         { "connectionId", "action", "mode": "SEMI_AUTO", "rawDescription"?, "draftText"? }
 POST /api/v1/platforms/tasks/{id}/confirm
 ```
 
 `action`：`SYNC_JOBS` / `DRAFT_GREET` / `FILL_REPLY` / `MARK_APPLIED`。  
 `SYNC_JOBS` 须带 `rawDescription`；确认后创建岗位 `source=IMPORT`（不爬站、**无独立 agent 仓**）。  
+`DRAFT_GREET` / `FILL_REPLY` 须带 `draftText`；确认后 `result.clipboardText` 返回原文，前端可写入系统剪贴板（用户再粘贴到招聘 App）。  
 `BOSS`/`LIEPIN` 创建连接 → 400。
 
 ---

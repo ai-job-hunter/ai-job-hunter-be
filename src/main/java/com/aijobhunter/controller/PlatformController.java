@@ -59,7 +59,8 @@ public class PlatformController {
                         body == null ? null : body.getMode(),
                         body == null ? null : body.getRawDescription(),
                         body == null ? null : body.getTitle(),
-                        body == null ? null : body.getCompanyName())));
+                        body == null ? null : body.getCompanyName(),
+                        body == null ? null : body.getDraftText())));
     }
 
     @PostMapping("/tasks/{id}/confirm")
@@ -84,5 +85,7 @@ public class PlatformController {
         private String rawDescription;
         private String title;
         private String companyName;
+        /** DRAFT_GREET / FILL_REPLY：待复制话术 */
+        private String draftText;
     }
 }
