@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 用户信息 Live API：GET/PUT /api/v1/users/me（需 IDEA/本机已启动后端）。
+ * 用户信息 Live API：GET/PUT /api/v1/users/me、改密码（需 IDEA/本机已启动后端）。
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @EnabledIf("com.aijobhunter.controller.UsersMeLiveIT#backendUp")
@@ -30,6 +30,7 @@ class UsersMeLiveIT {
     private static final String USERNAME = "me_" + UUID.randomUUID().toString().substring(0, 8);
     private static final String EMAIL = USERNAME + "@example.com";
     private static final String PASSWORD = "pass1234";
+    private static final String PASSWORD_NEW = "pass5678";
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3))
@@ -40,6 +41,7 @@ class UsersMeLiveIT {
     private static final Pattern USERNAME_JSON = Pattern.compile("\"username\"\\s*:\\s*\"([^\"]+)\"");
 
     private static String token;
+    private static String currentPassword = PASSWORD;
 
     static boolean backendUp() {
         try {
@@ -99,6 +101,37 @@ class UsersMeLiveIT {
                 .timeout(Duration.ofSeconds(5)).GET().build();
         HttpResponse<String> res = CLIENT.send(req, HttpResponse.BodyHandlers.ofString());
         assertThat(res.statusCode()).isBetween(400, 499);
+    }
+
+    @Test
+    @Order(4)
+    @DisplayName("USER-004 改密码：错旧密失败；对旧密成功后可用新密登录")
+    void changePassword() throws Exception {
+        HttpResponse<String> bad = putAuth("/api/v1/users/me/password", """
+                {"currentPassword":"wrong-old","newPassword":"%s"}
+                """.formatted(PASSWORD_NEW));
+        assertThat(bad.statusCode()).isEqualTo(400);
+        assertThat(bad.body()).contains("当前密码不正确");
+
+        HttpResponse<String> ok = putAuth("/api/v1/users/me/password", """
+                {"currentPassword":"%s","newPassword":"%s"}
+                """.formatted(currentPassword, PASSWORD_NEW));
+        assertThat(ok.statusCode()).isEqualTo(200);
+        assertThat(code(ok.body())).isEqualTo(0);
+        currentPassword = PASSWORD_NEW;
+
+        HttpResponse<String> loginOld = postJson("/api/v1/auth/login", """
+                {"account":"%s","password":"%s"}
+                """.formatted(EMAIL, PASSWORD));
+        assertThat(code(loginOld.body())).isNotEqualTo(0);
+
+        HttpResponse<String> loginNew = postJson("/api/v1/auth/login", """
+                {"account":"%s","password":"%s"}
+                """.formatted(EMAIL, PASSWORD_NEW));
+        assertThat(loginNew.statusCode()).isEqualTo(200);
+        assertThat(code(loginNew.body())).isEqualTo(0);
+        token = token(loginNew.body());
+        assertThat(token).isNotBlank();
     }
 
     private static HttpResponse<String> getAuth(String path) throws Exception {

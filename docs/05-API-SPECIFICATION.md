@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.12 | `PUT /users/me/password` 改密码 | orjrs |
 | 2026-11-26 | v1.11 | 投递时间线备注：`GET /applications/{id}`、`POST …/notes`；状态变更可带 note | orjrs |
 | 2026-11-23 | v1.10 | `/api/v1/agent/**` 与 Swagger 须登录；匿名仅 health/auth | orjrs |
 | 2026-11-20 | v1.9 | Word(doc/docx) 抽文本；上传后可 PARSED 供 AI 分析 | orjrs |
@@ -22,6 +23,12 @@
 | 2026-09-02 | v1.0 | 初始版本 | - |
 
 ---
+
+## [变更] 登录用户可改密码（2026-11-26）
+
+- **变更原因**：「我的」页此前只能改资料，无法改登录密码。
+- **包含代码**：`PUT /api/v1/users/me/password`；`ChangePasswordRequest`；`UsersMeLiveIT` USER-004。
+- **约定**：须登录；校验当前密码；新密码 ≥8 且不可与旧密相同；成功后旧密不可再登录。
 
 ## [变更] 投递时间线备注（2026-11-26）
 
@@ -303,6 +310,23 @@ PUT /api/v1/users/me
   }
 }
 ```
+
+## 3.4.1 修改密码
+
+```
+PUT /api/v1/users/me/password
+```
+
+**请求体：**
+
+```json
+{
+  "currentPassword": "oldPass123",
+  "newPassword": "newPass4567"
+}
+```
+
+当前密码错误 → 400「当前密码不正确」。新密码少于 8 位或与旧密相同 → 400。
 
 ## 3.5 更新 BOSS 连接
 
