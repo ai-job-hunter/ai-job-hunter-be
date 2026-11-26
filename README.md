@@ -7,6 +7,7 @@ Spring Boot 后端：求职材料管理 + DeepSeek AI（分析 JD / 简历 / 打
 - **做**：注册登录、简历（txt/PDF/Word）、粘贴 JD、匹配与打招呼、手动沟通、投递看板、统计与设置  
 - **不做**：BOSS 爬取与自动发消息（见 V2）
 
+V2 平台接入方案（合规边界 + 分阶段）：`docs/12-V2-PLATFORM-AGENT-PLAN.md`。  
 用户说明书与页面路径见前端仓库 `ai-job-hunter-fe/README.md`。
 
 ## 本地启动
@@ -46,6 +47,7 @@ LIVE_API_BASE=http://127.0.0.1:8088 ./gradlew test --tests com.aijobhunter.contr
 | `docs/09-TEST-STRATEGY.md` | 测试策略 |
 | `docs/10-DEPLOYMENT.md` | 部署运维 |
 | `docs/11-SPRINT6-TEST-REPORT.md` | V1 测试与发布报告 |
+| `docs/12-V2-PLATFORM-AGENT-PLAN.md` | V2 平台 / 半自动 Agent 方案 |
 
 ## 部署
 

@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.6 | 演进路线对齐 V2 方案文档 `12-V2-PLATFORM-AGENT-PLAN.md` | orjrs |
 | 2026-11-23 | v1.5 | Agent/Swagger 须登录；prod 拒绝弱 JWT；Sprint6 报告 | orjrs |
 | 2026-10-17 | v1.4 | Sprint3：岗位粘贴 JD + Spring AI；明确 V1 不建 Python Agent / 不爬 BOSS | orjrs |
 | 2026-10-11 | v1.3 | Security 放行 `/actuator/health`；禁用默认 inMemory user；Dockerfile 健康检查用 127.0.0.1 | orjrs |
@@ -15,6 +16,14 @@
 | 2026-09-06 | v1.1 | 架构调整：移除 Python BOSS Agent，Java 后端集成 Spring AI，V1 聚焦纯 AI 辅助能力 | - |
 
 ---
+
+## [变更] V2 演进路线对齐方案文档（2026-11-26）
+
+**变更原因**：V1 已发布，需要把「下一阶段做什么」写清楚，避免误以为要立刻未授权爬 BOSS。
+
+**包含文档**：`docs/12-V2-PLATFORM-AGENT-PLAN.md`；§十七 V2/V3 与附录仓库表。
+
+**变更前 → 变更后**：V2 描述偏笼统 → 明确半自动 + 合规连接器优先；BOSS 无授权自动化仍归更晚阶段。
 
 ## [变更] Agent 接口鉴权 + 生产 JWT 校验（2026-11-23）
 
@@ -616,15 +625,14 @@ ai-job-hunter/
 
 ## V2
 ```
-• 猎聘平台合规接入（打招呼无上限）
-• 多平台支持
-• 简历 A/B 测试
-• 薪资谈判助手
+• 平台 Connector 骨架 + 半自动确认流（见 docs/12-V2-PLATFORM-AGENT-PLAN.md）
+• 首个合规渠道接入（猎聘开放/合作或本机导入；非未授权爬取）
+• 多平台扩展、简历 A/B、薪资谈判助手
 ```
 
 ## V3
 ```
-• BOSS 平台自动化（需官方授权）
+• BOSS 平台自动化（需官方授权；默认仍半自动）
 • pgvector 语义匹配
 • 反馈学习优化
 • 智能策略调优
@@ -636,8 +644,10 @@ ai-job-hunter/
 
 | 模块 | 仓库路径 |
 |-----|---------|
-| 后端（含 Agent） | `ai-job-hunter-be/` |
+| 后端（含 LLM Agent） | `ai-job-hunter-be/` |
 | 前端 | `ai-job-hunter-fe/` |
+| 平台 Agent（V2，待建） | `ai-job-hunter-agent/` |
+| V2 方案 | `ai-job-hunter-be/docs/12-V2-PLATFORM-AGENT-PLAN.md` |
 
 ---
 
