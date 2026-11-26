@@ -325,14 +325,19 @@ class PlatformTaskLiveIT {
 
     @Test
     @Order(13)
-    @DisplayName("PLAT-013 确认 SUGGEST_REPLY → clipboardText")
+    @DisplayName("PLAT-013 确认 SUGGEST_REPLY → 记入会话 + clipboardText")
     void confirmSuggestReply() throws Exception {
         HttpResponse<String> res = postAuth("/api/v1/platforms/tasks/" + taskId + "/confirm", "{}");
         assertThat(res.statusCode()).isEqualTo(200);
         assertThat(code(res.body())).isEqualTo(0);
         assertThat(res.body()).contains("DONE");
         assertThat(res.body()).contains("clipboardText");
-        assertThat(res.body()).contains("推荐回复已就绪");
+        assertThat(res.body()).contains("messageId");
+        assertThat(res.body()).contains("已记入会话");
+
+        HttpResponse<String> detail = getAuth("/api/v1/conversations/" + conversationId);
+        assertThat(detail.statusCode()).isEqualTo(200);
+        assertThat(detail.body()).contains("OUTBOUND");
     }
 
     private static String extractField(String body, String field) {

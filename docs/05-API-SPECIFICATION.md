@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-26 | v1.19 | SUGGEST_REPLY 确认时写 OUTBOUND 到会话 + 剪贴板 | orjrs |
 | 2026-11-26 | v1.18 | SUGGEST_REPLY：选会话生成推荐，确认后 `clipboardText` | orjrs |
 | 2026-11-26 | v1.17 | IMPORT_CHAT 粘贴聊天导入会话；行前缀 HR:/我: | orjrs |
 | 2026-11-26 | v1.16 | MARK_APPLIED 须 `jobId`+`resumeId`；确认后写入投递看板 | orjrs |
@@ -32,9 +33,15 @@
 
 ## [变更] 平台 SUGGEST_REPLY 推荐复制（2026-11-26）
 
-- **变更原因**：阶段 C：半自动「AI 建议 → 确认 → 复制」，不代发。
-- **包含代码**：`SUGGEST_REPLY` + `conversationId`；复用 `ConversationService#suggestedReply`；LiveIT PLAT-012/013。
-- **约定**：创建任务时即生成草稿写入 `request.draftText`；确认只返回剪贴板字段。
+- **变更原因**：阶段 C：半自动「AI 建议 → 确认 → 回填本地会话 + 复制」，不代发。
+- **包含代码**：`SUGGEST_REPLY` + `conversationId`；复用 `suggestedReply` / `sendSuggested`；LiveIT PLAT-012/013。
+- **约定**：创建时生成 `request.draftText`；确认写 OUTBOUND + `clipboardText` + `messageId`。
+
+## [变更] SUGGEST_REPLY 确认回填会话（2026-11-26）
+
+- **变更原因**：仅复制不够，「回填」需在本系统留下发出记录。
+- **包含代码**：`PlatformService` 确认分支调 `sendSuggested`。
+- **约定**：仍不向招聘站发消息；用户自行粘贴。
 
 ## [变更] 平台 IMPORT_CHAT 导入会话（2026-11-26）
 
@@ -1247,7 +1254,7 @@ POST /api/v1/platforms/tasks/{id}/confirm
 `DRAFT_GREET` / `FILL_REPLY` 须带 `draftText`；确认后 `result.clipboardText` 返回原文，前端可写入系统剪贴板（用户再粘贴到招聘 App）。  
 `MARK_APPLIED` 须带 `jobId` + `resumeId`（可选 `applyNote`）；确认后创建投递 `SUBMITTED`，返回 `applicationId`。  
 `IMPORT_CHAT` 须带 `chatText`（可选 `hrName` / `jobId`）；按行解析 `HR:`/`我:`，确认后写入沟通列表，返回 `conversationId`。  
-`SUGGEST_REPLY` 须带 `conversationId`；创建时调用 ChatAgent 生成草稿，确认后 `clipboardText`（不代发）。  
+`SUGGEST_REPLY` 须带 `conversationId`；创建时调用 ChatAgent 生成草稿；确认后写入会话 OUTBOUND + `clipboardText`（不代发到招聘站）。  
 `BOSS`/`LIEPIN` 创建连接 → 400。
 
 ---

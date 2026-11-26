@@ -223,9 +223,7 @@ public class PlatformService {
                 result.put("syncedJobs", 1);
                 result.put("jobId", job.getId());
                 result.put("jobTitle", job.getTitle());
-            } else if ("DRAFT_GREET".equals(task.getAction())
-                    || "FILL_REPLY".equals(task.getAction())
-                    || "SUGGEST_REPLY".equals(task.getAction())) {
+            } else if ("DRAFT_GREET".equals(task.getAction()) || "FILL_REPLY".equals(task.getAction())) {
                 Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
                 Object draft = req.get("draftText");
                 if (draft == null || draft.toString().isBlank()) {
@@ -233,12 +231,24 @@ public class PlatformService {
                 }
                 String text = draft.toString();
                 result.put("clipboardText", text);
-                result.put("message", "SUGGEST_REPLY".equals(task.getAction())
-                        ? "推荐回复已就绪，请复制到招聘 App"
-                        : "话术已就绪，请复制到招聘 App");
-                if (req.get("conversationId") != null) {
-                    result.put("conversationId", req.get("conversationId").toString());
+                result.put("message", "话术已就绪，请复制到招聘 App");
+                result.put("syncedJobs", 0);
+            } else if ("SUGGEST_REPLY".equals(task.getAction())) {
+                Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
+                Object draft = req.get("draftText");
+                Object cid = req.get("conversationId");
+                if (draft == null || draft.toString().isBlank()) {
+                    throw new IllegalArgumentException("任务缺少话术内容");
                 }
+                if (cid == null || cid.toString().isBlank()) {
+                    throw new IllegalArgumentException("任务缺少会话");
+                }
+                String text = draft.toString();
+                Map<String, Object> msg = conversationService.sendSuggested(userId, cid.toString(), text);
+                result.put("clipboardText", text);
+                result.put("message", "已记入会话并就绪复制（请粘贴到招聘 App，不代发）");
+                result.put("conversationId", cid.toString());
+                result.put("messageId", msg.get("id"));
                 result.put("syncedJobs", 0);
             } else if ("MARK_APPLIED".equals(task.getAction())) {
                 Map<String, Object> req = task.getRequest() == null ? Map.of() : task.getRequest();
