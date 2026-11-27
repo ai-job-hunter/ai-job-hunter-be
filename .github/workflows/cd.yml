@@ -26,6 +26,8 @@
 #   - 详见 docs/10-DEPLOYMENT.md §「边界声明」与 §0「变更记录」。
 #
 # 变更记录（按 .cursor/rules/global-coding.mdc §2 同步 docs/10-DEPLOYMENT.md）：
+#   - 2026-11-27  fix: SSH 端口先解析（空/非法→22）+ timeout 60s；
+#                       handshake EOF 与远程 script 无关（见 docs/10-DEPLOYMENT.md Q0）
 #   - 2026-09-28  fix: 三处 sed -i 改 tee 原子写入，规避
 #                       "couldn't open temporary file ./seda96rCm: Permission denied"
 #                       （详见 docs/10-DEPLOYMENT.md §5 末尾「工作流踩坑」）
@@ -171,6 +173,19 @@ jobs:
           ssh-keygen -l -f ~/ssh_key
           echo "SSH key validated"
 
+      # secrets 为空时，表达式里直接 || 22 偶发仍把空串传给 appleboy；先解析成明确端口号
+      - name: Resolve SSH port
+        id: ssh_port
+        env:
+          RAW_PORT: ${{ secrets.DEPLOY_SSH_PORT }}
+        run: |
+          PORT="${RAW_PORT:-22}"
+          case "$PORT" in
+            ''|*[!0-9]*) PORT=22 ;;
+          esac
+          echo "port=$PORT" >> "$GITHUB_OUTPUT"
+          echo "Using SSH port: $PORT"
+
       - name: Deploy to server (with auto-rollback)
         id: deploy
         uses: appleboy/ssh-action@v1.2.5
@@ -181,8 +196,11 @@ jobs:
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
-          port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}
+          port: ${{ steps.ssh_port.outputs.port }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
+          # 握手/连接超时（秒）；避免空等很久才 EOF
+          timeout: 60s
+          command_timeout: 15m
           envs: DEPLOY_PATH,COMPOSE_FILE,COMPOSE_SERVICES,NEW_IMAGE_TAG,MANUAL_TAG,REASON
           script: |
             set -e

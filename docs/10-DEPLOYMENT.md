@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|---|
+| 2026-11-27 | v1.14 | CD：SSH 端口先解析再连；timeout 60s；FAQ 补 handshake EOF（非远程脚本） | orjrs |
 | 2026-11-23 | v1.13 | prod 弱 JWT 启动失败；Agent 接口须登录（与 compose 无直接关系） | orjrs |
 | 2026-11-20 | v1.12 | BE 健康检查改 wget；镜像装 curl 兼容旧 compose；CD 等 3 分钟并打日志 | orjrs |
 | 2026-10-14 | v1.11 | 每个 compose 服务补 cpus；同机多项目防 CPU 打满 | orjrs |
@@ -20,6 +21,15 @@
 | 2026-10-11 | v1.4 | 放行 `/actuator/health`（修复 BE unhealthy 403）；Dockerfile 健康检查改 127.0.0.1 | orjrs |
 | 2026-10-18 | v1.4 | CI smoke 强制 RUN_TESTCONTAINERS + ApiFlowIT；unit 拆 Jwt/JobService | orjrs |
 | 2026-10-11 | v1.3 | 方案 A：前端 Traefik 端口 80 + Host(DOMAIN)；FAQ 补 502 | orjrs |
+
+## [变更] CD SSH 端口解析与握手超时（2026-11-27）
+
+- **变更原因**：CD 报 `ssh: handshake failed: EOF`；远程 `script` 在握手成功前不会执行，排除「部署脚本写坏」作为本次根因。
+- **包含代码**：`.github/workflows/cd.yml`（`Resolve SSH port` 步骤；`timeout: 60s`）。
+- **影响范围**：仅 Actions 连接参数；服务器上的 compose / `.env` 不变。
+- **变更前**：`port: ${{ secrets.DEPLOY_SSH_PORT || 22 }}`，空 Secret 偶发仍传空串；无显式握手超时。
+- **变更后**：先把端口解析成数字（非法/空 → 22）再交给 appleboy；握手超时 60s。
+- **运维自查**：本机 `ssh -v -p <端口> <用户>@<主机>`；核对 Secrets 的 `DEPLOY_HOST` / `DEPLOY_USER` / `DEPLOY_SSH_PORT`；服务器侧看 sshd 监听、防火墙、安全组。
 
 ## [变更] 生产 JWT 与 Agent 鉴权（2026-11-23）
 
@@ -251,7 +261,7 @@ git push → CI 通过 → CD 自动构建镜像 → 推送 GHCR → SSH 到服�
 | `DEPLOY_SSH_KEY` | SSH 私钥（推荐 ed25519） |
 | `DEPLOY_HOST` | 服务器地址（如 `cogniforge.example.com`） |
 | `DEPLOY_USER` | SSH 用户名（如 `deploy`） |
-| `DEPLOY_SSH_PORT` | SSH 端口（默认 22） |
+| `DEPLOY_SSH_PORT` | SSH 端口（可选；空/非法时 workflow 强制用 22） |
 | `DEPLOY_PATH` | 服务器部署目录（如 `/opt/project/ai-job-hunter`） |
 
 ### 通知机制（无需配置）
@@ -326,6 +336,34 @@ docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' | grep ai-job-hun
 修复：把 compose 里 `loadbalancer.server.port` 改成 **80**，`expose` 改成 **80**，路由改成 `Host(\`${DOMAIN}\`)`，然后 `docker compose up -d --force-recreate ai-job-hunter-fe`。
 
 若首页已通、只有 `/api` 502：查后端是否 healthy、是否与前端同在 `proxy` 网。
+
+### Q0：CD 报 `ssh: handshake failed: EOF`（连接阶段就挂）
+
+**症状**：
+
+```
+Run appleboy/ssh-action@…
+  err: ssh: handshake failed: EOF
+```
+
+且同一次 run 里 **Validate SSH key** 已成功（私钥格式没问题）。
+
+**结论**：不是远程部署脚本写坏。appleboy 必须先完成 TCP + SSH 握手，才会把 `script:` 发到服务器；握手 EOF 时远程 shell / `docker compose` / `UPGRADE_LOG` **一行都没跑**。
+
+**常见原因**（按优先级自查）：
+
+1. `DEPLOY_HOST` / `DEPLOY_SSH_PORT` 填错，或端口 Secret 为空导致连错端口（v1.14 起 workflow 会把空/非法端口收成 22）
+2. 云安全组 / 本机防火墙未放行 Actions 出口 IP 到该 SSH 端口
+3. 服务器 `sshd` 未监听、挂了，或只绑了内网地址
+4. 中间设备掐断 TLS/SSH 握手（少见）
+
+**自查**（在能上公网的机器上，用与 Secrets 相同的主机/端口/用户）：
+
+```bash
+ssh -v -p <DEPLOY_SSH_PORT> <DEPLOY_USER>@<DEPLOY_HOST>
+```
+
+连不上就先修服务器/网络；连得上再重跑 CD。私钥本身已在 Actions 里 `ssh-keygen -l` 校验过，一般不是「密钥文件坏了」。
 
 ### Q1：部署卡在「Health check」/ 后端 `unhealthy` 但日志已 Started
 - 查看 GHCR 是否有新镜像：`docker images | grep ai-job-hunter-be`
