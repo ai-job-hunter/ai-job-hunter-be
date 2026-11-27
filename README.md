@@ -2,13 +2,13 @@
 
 Spring Boot 后端：求职材料管理 + DeepSeek AI（分析 JD / 简历 / 打招呼 / 回复 / 周报）。
 
-## V1 范围
+## 范围
 
-- **做**：注册登录、简历（txt/PDF/Word）、粘贴 JD、匹配与打招呼、手动沟通、投递看板、统计与设置  
-- **不做**：BOSS 爬取与自动发消息（见 V2）
+- **V1**：注册登录、简历（txt/PDF/Word）、粘贴 JD、匹配与打招呼、手动沟通、投递看板、统计与设置  
+- **V2（已落地 A～C）**：`/api/v1/platforms/**` MOCK + 本机导入 JD/会话、草稿/AI 推荐复制与回填；**不建**独立 agent 仓  
+- **不做 / 待授权**：BOSS 等真站代登代发（阶段 D）
 
-V2 平台接入方案（合规边界 + 分阶段）：`docs/12-V2-PLATFORM-AGENT-PLAN.md`。  
-用户说明书与页面路径见前端仓库 `ai-job-hunter-fe/README.md`。
+方案：`docs/12-V2-PLATFORM-AGENT-PLAN.md`。用户说明书见前端 `ai-job-hunter-fe/README.md`。
 
 ## 本地启动
 

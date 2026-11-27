@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-27 | v1.18 | 勾掉「Nuxt 4 未做」；平台 A～C 门禁已含 LiveIT/e2e | orjrs |
 | 2026-11-26 | v1.17 | 平台导入 JD→IMPORT；明确不建 agent 仓 | orjrs |
 | 2026-11-26 | v1.16 | PlatformTaskLiveIT PLAT-001～004；FE platforms E2E | orjrs |
 | 2026-11-26 | v1.15 | USER-004 改密码；FE profile E2E | orjrs |
@@ -130,7 +131,7 @@ PLAYWRIGHT_BASE_URL=http://127.0.0.1:3010 npm run test:e2e
 
 - **变更原因**：PDF/黑名单/模板落地后补门禁并跑通本地全套。
 - **结果**：`JobLiveIT` 001～009；`JobServiceTest` 含黑名单/模板；FE `auth/jobs/conversations/resume-ai/stats` E2E 全过。
-- **未做**：正式测试报告归档、性能压测、安全专项、Nuxt 4 升级。
+- **未做**：正式测试报告归档、性能压测、安全专项。~~Nuxt 4 升级~~（2026-11-26 已完成）。
 
 ## [变更] Sprint4 沟通与投递测试（2026-10-26）
 

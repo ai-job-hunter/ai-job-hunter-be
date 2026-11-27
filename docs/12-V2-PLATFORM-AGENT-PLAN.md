@@ -8,6 +8,7 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-27 | v1.9 | §10 与现状对齐：A～C 已落地；D 仍待授权 | orjrs |
 | 2026-11-26 | v1.8 | 阶段 C 主路径收口；FE e2e 覆盖 IMPORT_CHAT | orjrs |
 | 2026-11-26 | v1.7 | SUGGEST_REPLY 确认时回填会话 OUTBOUND + 复制 | orjrs |
 | 2026-11-26 | v1.6 | SUGGEST_REPLY：AI 建议 → 确认 → 复制剪贴板 | orjrs |
@@ -201,11 +202,17 @@ platform_task
 
 ## 10. 下一步（实现开关）
 
-本文件为**规划**；代码开工请按阶段 A 清单开 Sprint，并同步：
+### [变更] 进度对齐（2026-11-27）
 
-- `08-DEVELOPMENT-PLAN.md`（增 V2 Sprint）  
-- `04-ER-DESIGN.md` / `05-API-SPECIFICATION.md`  
-- `06-AGENT-SPECIFICATION.md`（增 Platform Agent 章节）  
-- FE/BE README 的「尚未做」改为「进行中」  
+- **变更原因**：A～C 已在 be/fe 落地，§10 旧文「均未编码」会误导。  
+- **现状**：阶段 A/B/C（MOCK + 本机导入 JD/会话 + 剪贴板/回填）✅；阶段 D（真平台）⏸ 待授权。  
+- **不建**独立 `ai-job-hunter-agent` 远程仓。
 
-当前命令若只要文档：阶段 A～D **均未编码**，以本文件为唯一事实来源即可。
+| 阶段 | 状态 |
+|------|------|
+| A 骨架 | ✅ |
+| B 本机导入 | ✅ |
+| C 聊天半自动 | ✅（细粒度看板自动化延后） |
+| D BOSS/真平台 | ⏸ 需官方授权 |
+
+后续同步文档：`08-DEVELOPMENT-PLAN.md` §7.2、`06-AGENT-SPECIFICATION.md`、两端 README。

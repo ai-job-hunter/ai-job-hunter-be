@@ -8,13 +8,19 @@
 ## [变更记录]
 | 日期 | 版本 | 变更摘要 | 负责人 |
 |---|---|---|-----|
+| 2026-11-27 | v1.2 | 平台半自动（IMPORT/SUGGEST 等）已在 BE 落地，无独立浏览器 Agent 仓 | orjrs |
 | 2026-11-26 | v1.1 | 注明：本文 LLM Agent 为 V1；平台浏览器 Agent 见 `12-V2-PLATFORM-AGENT-PLAN.md` | orjrs |
 | 2026-09-02 | v1.0 | 初始版本 | - |
+
+## [变更] 与 V2 平台半自动边界（2026-11-27）
+
+- **变更原因**：阶段 A～C 已落地；避免仍写「平台尚未实现」。
+- **约定**：JD/Match/Greet/Chat/Resume/Weekly 仍在 **Java Spring AI**；平台任务（导入 JD/会话、草稿复制、SUGGEST_REPLY）也在 **同一 BE**，经 `/api/v1/platforms/**`，**不建**独立浏览器 Agent 仓。真站代发见阶段 D（待授权）。
 
 ## [变更] 与 V2 平台 Agent 边界（2026-11-26）
 
 - **变更原因**：避免把「LLM 话术 Agent」和「招聘站浏览器/连接器 Agent」混为一谈。
-- **约定**：本文描述的 JD/Match/Greet/Chat/Resume/Weekly 仍在 **Java Spring AI**；平台取数/填表见 `12-V2-PLATFORM-AGENT-PLAN.md`，**尚未实现**。
+- ~~平台取数/填表尚未实现~~（2026-11-27：半自动路径已在 BE 落地）。
 
 ---
 
